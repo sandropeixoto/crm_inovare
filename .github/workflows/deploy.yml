@@ -11,11 +11,9 @@ jobs:
     name: Publicar código no servidor AWS
 
     steps:
-      # 1️⃣ Faz checkout do repositório
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      # 2️⃣ Faz upload via SSH para a instância AWS
       - name: Upload de arquivos para AWS EC2
         uses: easingthemes/ssh-deploy@v4
         env:
@@ -26,21 +24,33 @@ jobs:
           SOURCE: "./"
           TARGET: "/var/www/html/crm_inovare"
           EXCLUDE: |
-            .git*
-            .github*
-            .env
-            node_modules/
-            vendor/
-            storage/
-            tmp/
-            cache/
-            logs/
-            *.log
-            *.zip
-            *.tar
-            *.gz
+            **/.git*
+            **/.github*
+            **/.env
+            **/node_modules/**
+            **/vendor/**
+            **/storage/**
+            **/tmp/**
+            **/cache/**
+            **/logs/**
+            **/*.log
+            **/*.zip
+            **/*.tar
+            **/*.gz
+          ARGS: "-rlgoDzvc --delete"
 
-      # 3️⃣ Reinicia o servidor web (Apache ou Nginx)
+      - name: Corrigir permissões no servidor
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.AWS_SERVER_IP }}
+          username: ${{ secrets.AWS_USER }}
+          key: ${{ secrets.AWS_SSH_KEY }}
+          script: |
+            echo "🔧 Corrigindo permissões em /var/www/html/crm_inovare"
+            sudo mkdir -p /var/www/html/crm_inovare
+            sudo chown -R $USER:www-data /var/www/html/crm_inovare
+            sudo chmod -R 775 /var/www/html/crm_inovare
+
       - name: Reiniciar Apache/Nginx
         uses: appleboy/ssh-action@v1.0.0
         with:
