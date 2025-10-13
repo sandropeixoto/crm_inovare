@@ -3,28 +3,29 @@ name: 🚀 Deploy Automático para AWS EC2
 on:
   push:
     branches:
-      - main   # dispara o deploy sempre que houver push na branch main
+      - main
 
 jobs:
   deploy:
-    name: Publicar código no servidor AWS
     runs-on: ubuntu-latest
+    name: Publicar código no servidor AWS
 
     steps:
-      # 1️⃣ Faz o checkout do código no ambiente do GitHub Actions
+      # 1️⃣ Faz checkout do repositório
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      # 2️⃣ Faz upload dos arquivos modificados para o servidor AWS via SSH
-      - name: Upload de arquivos para a instância EC2
+      # 2️⃣ Faz upload via SSH para a instância AWS
+      - name: Upload de arquivos para AWS EC2
         uses: easingthemes/ssh-deploy@v4
-        with:
-          ssh-private-key: ${{ secrets.AWS_SSH_KEY }}       # chave privada PEM (configurada em Secrets)
-          remote-user: ${{ secrets.AWS_USER }}              # geralmente 'ubuntu' ou 'ec2-user'
-          server-ip: ${{ secrets.AWS_SERVER_IP }}           # IP público da instância
-          remote-path: /var/www/html/crm_inovare            # diretório destino no servidor
-          local-path: ./                                   # envia tudo a partir da raiz do repo
-          exclude: |                                       # ignora arquivos desnecessários
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.AWS_SSH_KEY }}
+          REMOTE_HOST: ${{ secrets.AWS_SERVER_IP }}
+          REMOTE_USER: ${{ secrets.AWS_USER }}
+          REMOTE_PORT: 22
+          SOURCE: "./"
+          TARGET: "/var/www/html/crm_inovare"
+          EXCLUDE: |
             .git*
             .github*
             .env
@@ -39,8 +40,8 @@ jobs:
             *.tar
             *.gz
 
-      # 3️⃣ Reinicia o Apache ou Nginx após o deploy
-      - name: Reiniciar servidor web
+      # 3️⃣ Reinicia o servidor web (Apache ou Nginx)
+      - name: Reiniciar Apache/Nginx
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.AWS_SERVER_IP }}
@@ -61,6 +62,5 @@ jobs:
               echo "⚠️ Nenhum servidor web detectado!"
             fi
 
-      # 4️⃣ (Opcional) Exibe mensagem de conclusão no log do GitHub Actions
       - name: Finalização
-        run: echo "🎉 Deploy concluído com sucesso em ${{ secrets.AWS_SERVER_IP }}"
+        run: echo "🎉 Deploy concluído com sucesso para ${{ secrets.AWS_SERVER_IP }}"
