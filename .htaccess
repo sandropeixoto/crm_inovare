@@ -1,0 +1,13 @@
+# Ativar exibição de erros PHP
+php_flag display_errors On
+php_flag display_startup_errors On
+php_value error_reporting 32767
+
+# Registrar também em log
+php_flag log_errors On
+php_value error_log /var/log/apache2/php_errors.log
+
+# Evitar cache (útil em debug)
+Header set Cache-Control "no-cache, no-store, must-revalidate"
+Header set Pragma "no-cache"
+Header set Expires 0
