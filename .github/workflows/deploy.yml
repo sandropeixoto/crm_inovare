@@ -46,10 +46,10 @@ jobs:
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            echo "🔧 Corrigindo permissões em /var/www/html/crm_inovare"
-            sudo mkdir -p /var/www/html/crm_inovare
-            sudo chown -R $USER:www-data /var/www/html/crm_inovare
-            sudo chmod -R 775 /var/www/html/crm_inovare
+            echo "🔧 Corrigindo permissões em /var/www/html/inovare"
+            sudo mkdir -p /var/www/html/inovare
+            sudo chown -R $USER:www-data /var/www/html/inovare
+            sudo chmod -R 775 /var/www/html/inovare
 
       - name: Reiniciar Apache/Nginx
         uses: appleboy/ssh-action@v1.0.0
