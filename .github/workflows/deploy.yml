@@ -1,0 +1,66 @@
+name: 🚀 Deploy Automático para AWS EC2
+
+on:
+  push:
+    branches:
+      - main   # dispara o deploy sempre que houver push na branch main
+
+jobs:
+  deploy:
+    name: Publicar código no servidor AWS
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Faz o checkout do código no ambiente do GitHub Actions
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # 2️⃣ Faz upload dos arquivos modificados para o servidor AWS via SSH
+      - name: Upload de arquivos para a instância EC2
+        uses: easingthemes/ssh-deploy@v4
+        with:
+          ssh-private-key: ${{ secrets.AWS_SSH_KEY }}       # chave privada PEM (configurada em Secrets)
+          remote-user: ${{ secrets.AWS_USER }}              # geralmente 'ubuntu' ou 'ec2-user'
+          server-ip: ${{ secrets.AWS_SERVER_IP }}           # IP público da instância
+          remote-path: /var/www/html/crm_inovare            # diretório destino no servidor
+          local-path: ./                                   # envia tudo a partir da raiz do repo
+          exclude: |                                       # ignora arquivos desnecessários
+            .git*
+            .github*
+            .env
+            node_modules/
+            vendor/
+            storage/
+            tmp/
+            cache/
+            logs/
+            *.log
+            *.zip
+            *.tar
+            *.gz
+
+      # 3️⃣ Reinicia o Apache ou Nginx após o deploy
+      - name: Reiniciar servidor web
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.AWS_SERVER_IP }}
+          username: ${{ secrets.AWS_USER }}
+          key: ${{ secrets.AWS_SSH_KEY }}
+          script: |
+            echo "🔄 Reiniciando servidor web..."
+            if command -v apache2 > /dev/null; then
+              sudo systemctl restart apache2
+              echo "✅ Apache reiniciado"
+            elif command -v httpd > /dev/null; then
+              sudo systemctl restart httpd
+              echo "✅ HTTPD reiniciado"
+            elif command -v nginx > /dev/null; then
+              sudo systemctl restart nginx
+              echo "✅ Nginx reiniciado"
+            else
+              echo "⚠️ Nenhum servidor web detectado!"
+            fi
+
+      # 4️⃣ (Opcional) Exibe mensagem de conclusão no log do GitHub Actions
+      - name: Finalização
+        run: echo "🎉 Deploy concluído com sucesso em ${{ secrets.AWS_SERVER_IP }}"
