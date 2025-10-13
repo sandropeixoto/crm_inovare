@@ -187,19 +187,19 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
         <ul class="pagination mb-0">
           <?php
           // função para manter filtros nos links de paginação
-          $qs_base = $_GET;
-          $qs_base['pp'] = $por_pagina;
-          $renderLink = function($p, $label = null, $disabled = false, $active = false) use ($qs_base) {
-              $qs = $qs_base;
-              $qs['p'] = $p;
-              $href = '?' . http_build_query($qs);
-              $class = 'page-link';
-              $li = 'page-item';
-              if ($disabled) $li .= ' disabled';
-              if ($active) $li .= ' active';
-              $label = $label ?? $p;
-              return "<li class=\\"$li\\"><a class=\\"$class\\" href=\\"$href\\">$label</a></li>";
-          };
+            $qs_base = $_GET;
+            $qs_base['pp'] = $por_pagina;
+            $renderLink = function($p, $label = null, $disabled = false, $active = false) use ($qs_base) {
+                $qs = $qs_base;
+                $qs['p'] = $p;
+                $href = '?' . http_build_query($qs);
+                $class = 'page-link';
+                $li = 'page-item';
+                if ($disabled) $li .= ' disabled';
+                if ($active) $li .= ' active';
+                $label = $label ?? $p;
+                return '<li class="' . $li . '"><a class="' . $class . '" href="' . $href . '">' . $label . '</a></li>';
+            };
           echo $renderLink(max(1, $pagina-1), '&laquo;', $pagina<=1);
           // janela simples de paginação
           $ini = max(1, $pagina - 2);
