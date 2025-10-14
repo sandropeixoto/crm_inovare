@@ -32,10 +32,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-define('DB_HOST', getenv('CRM_DB_HOST') ?: 'localhost');
-define('DB_NAME', getenv('CRM_DB_NAME') ?: 'crm_inovare');
-define('DB_USER', getenv('CRM_DB_USER') ?: 'root');
-define('DB_PASS', getenv('CRM_DB_PASS') ?: 'SENHA_FORTE_AQUI');
 /**
  * Carrega variáveis de ambiente a partir do arquivo .env (se existir)
  */
