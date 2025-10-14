@@ -1,11 +1,10 @@
 <?php
 require_once __DIR__ . '/../config/db.php';
-// session_start();
 
-// Se já estiver logado, vai direto para o dashboard
+ensure_session_security(false);
+
 if (!empty($_SESSION['user'])) {
-  header("Location: /inovare/public/index.php");
-  exit;
+  redirect(app_url('index.php'));
 }
 
 // Busca configurações da empresa
@@ -17,22 +16,28 @@ $config = run_query("SELECT * FROM configuracoes WHERE ativo=1 LIMIT 1")[0] ?? [
 
 $erro = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $email = trim($_POST['email']);
-  $senha = trim($_POST['senha']);
+  validate_csrf_token($_POST['_token'] ?? null);
 
-  $user = run_query("SELECT * FROM usuarios WHERE email=? AND ativo=1", [$email]);
-  if ($user && password_verify($senha, $user[0]['senha_hash'])) {
-    $_SESSION['user'] = [
-      'id' => $user[0]['id'],
-      'nome' => $user[0]['nome'],
-      'email' => $user[0]['email'],
-      'perfil' => $user[0]['perfil']
-    ];
-    run_query("UPDATE usuarios SET ultimo_login=NOW() WHERE id=?", [$user[0]['id']]);
-    header("Location: /inovare/public/index.php");
-    exit;
+  $email = trim($_POST['email'] ?? '');
+  $senha = trim($_POST['senha'] ?? '');
+
+  if (!$email || !$senha) {
+    $erro = 'Informe usuário e senha.';
   } else {
-    $erro = "Usuário ou senha inválidos.";
+    $user = run_query("SELECT * FROM usuarios WHERE email=? AND ativo=1", [$email]);
+    if ($user && password_verify($senha, $user[0]['senha_hash'])) {
+      session_regenerate_id(true);
+      $_SESSION['user'] = [
+        'id' => (int)$user[0]['id'],
+        'nome' => $user[0]['nome'],
+        'email' => $user[0]['email'],
+        'perfil' => $user[0]['perfil']
+      ];
+      run_query("UPDATE usuarios SET ultimo_login=NOW() WHERE id=?", [$user[0]['id']]);
+      redirect(app_url('index.php'));
+    } else {
+      $erro = "Usuário ou senha inválidos.";
+    }
   }
 }
 ?>
@@ -68,7 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="alert alert-danger py-1"><?= htmlspecialchars($erro) ?></div>
     <?php endif; ?>
 
-    <form method="POST">
+    <form method="POST" novalidate>
+      <?= csrf_field() ?>
       <div class="mb-3 text-start">
         <label class="form-label">E-mail</label>
         <input type="email" name="email" class="form-control" required autofocus>

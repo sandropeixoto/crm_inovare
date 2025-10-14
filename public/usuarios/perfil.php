@@ -11,6 +11,7 @@ $mensagem = '';
 $erro = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  validate_csrf_token($_POST['_token'] ?? null);
   $senha_atual = $_POST['senha_atual'] ?? '';
   $nova_senha = $_POST['nova_senha'] ?? '';
   $confirmar = $_POST['confirmar'] ?? '';
@@ -58,6 +59,7 @@ ob_start();
     <?php endif; ?>
 
     <form method="POST" style="max-width:500px;">
+      <?= csrf_field() ?>
       <div class="mb-3">
         <label class="form-label">Senha Atual</label>
         <input type="password" name="senha_atual" class="form-control" required>
