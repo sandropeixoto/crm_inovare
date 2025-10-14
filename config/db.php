@@ -36,6 +36,84 @@ define('DB_HOST', getenv('CRM_DB_HOST') ?: 'localhost');
 define('DB_NAME', getenv('CRM_DB_NAME') ?: 'crm_inovare');
 define('DB_USER', getenv('CRM_DB_USER') ?: 'root');
 define('DB_PASS', getenv('CRM_DB_PASS') ?: 'SENHA_FORTE_AQUI');
+/**
+ * Carrega variáveis de ambiente a partir do arquivo .env (se existir)
+ */
+if (!function_exists('load_env_file')) {
+    /**
+     * Lê um arquivo .env e injeta as chaves em getenv()/$_ENV/$_SERVER.
+     */
+    function load_env_file(string $filePath): void
+    {
+        static $loaded = false;
+        if ($loaded) {
+            return;
+        }
+        $loaded = true;
+
+        if (!is_readable($filePath)) {
+            return;
+        }
+
+        $lines = file($filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if ($lines === false) {
+            return;
+        }
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '' || $line[0] === '#') {
+                continue;
+            }
+
+            $parts = explode('=', $line, 2);
+            if (count($parts) !== 2) {
+                continue;
+            }
+
+            $name = trim($parts[0]);
+            $value = trim($parts[1]);
+
+            if ($value !== '') {
+                $quoteStart = $value[0];
+                $quoteEnd = substr($value, -1);
+                if (($quoteStart === '"' || $quoteStart === "'") && $quoteStart === $quoteEnd) {
+                    $value = substr($value, 1, -1);
+                }
+            }
+
+            if ($name === '' || getenv($name) !== false) {
+                continue;
+            }
+
+            putenv($name . '=' . $value);
+            $_ENV[$name] = $value;
+            $_SERVER[$name] = $value;
+        }
+    }
+}
+
+if (!function_exists('env')) {
+    /**
+     * Recupera variável de ambiente com fallback.
+     */
+    function env(string $key, $default = null)
+    {
+        $value = getenv($key);
+        return $value === false ? $default : $value;
+    }
+}
+
+$rootPath = dirname(__DIR__);
+load_env_file($rootPath . '/.env');
+
+/**
+ * Configuração — ajuste para o seu ambiente
+ */
+define('DB_HOST', env('CRM_DB_HOST', 'localhost'));
+define('DB_NAME', env('CRM_DB_NAME', 'crm_inovare'));
+define('DB_USER', env('CRM_DB_USER', 'root'));
+define('DB_PASS', env('CRM_DB_PASS', 'SENHA_FORTE_AQUI'));
 define('DB_CHARSET', 'utf8mb4');
 
 function pdo(): PDO

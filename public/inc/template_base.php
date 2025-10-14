@@ -227,6 +227,12 @@ function menu_is_active(string $link, string $current_url): bool
       </div>
 
       <?= $content ?? '' ?>
+    <div class="mt-auto border-top small text-center pt-3 sidebar-footer">
+      Logado como:<br>
+      <strong><?= htmlspecialchars($user['nome']) ?></strong><br>
+      <a href="<?= $base_path ?>logout.php" class="text-warning text-decoration-none">Sair</a>
+    </div>
+  </div>
 
       <footer class="mt-5 pt-4 small text-muted text-center">
         <?= e($config['rodape'] ?? 'CRM Inovare') ?>
