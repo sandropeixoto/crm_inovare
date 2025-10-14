@@ -41,7 +41,7 @@ $por_pagina = max(10, (int)($_GET['pp'] ?? 10));
 $pagina_atual = max(1, (int)($_GET['p'] ?? 1));
 $offset = ($pagina_atual - 1) * $por_pagina;
 
-// Contagem total
+// Contagem total 
 $total_registros = run_query("SELECT COUNT(*) AS total FROM {$tabela} {$where_sql}", $params)[0]['total'] ?? 0;
 $total_paginas = max(1, ceil($total_registros / $por_pagina));
 
