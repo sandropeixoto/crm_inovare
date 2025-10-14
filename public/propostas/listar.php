@@ -5,6 +5,7 @@ ensure_session_security();
 require_role(['admin','gestor','comercial','visualizador']);
 
 $cliente = trim($_GET['cliente'] ?? '');
+$clienteId = (int)($_GET['cliente_id'] ?? 0);
 $status  = $_GET['status'] ?? '';
 $usuario = $_GET['usuario'] ?? '';
 $data_ini = $_GET['data_ini'] ?? '';
@@ -20,6 +21,10 @@ $params = [];
 if ($cliente !== '') {
     $where[] = "c.nome_fantasia LIKE ?";
     $params[] = "%{$cliente}%";
+}
+if ($clienteId > 0) {
+    $where[] = "p.id_cliente = ?";
+    $params[] = $clienteId;
 }
 if ($status !== '' && in_array($status, ['rascunho','enviada','aceita','rejeitada','expirada'], true)) {
     $where[] = "p.status = ?";
@@ -68,6 +73,9 @@ ob_start();
 <div class="card mb-3 shadow-sm">
   <div class="card-body">
     <form class="row g-3" method="GET">
+      <?php if($clienteId > 0): ?>
+        <input type="hidden" name="cliente_id" value="<?= $clienteId ?>">
+      <?php endif; ?>
       <div class="col-md-3">
         <label class="form-label">Cliente</label>
         <input type="text" name="cliente" class="form-control" value="<?= e($cliente) ?>" placeholder="Nome fantasia">
@@ -111,20 +119,21 @@ ob_start();
       <table class="table table-striped mb-0">
         <thead class="table-light">
           <tr>
-            <th>#</th>
-            <th>Cliente</th>
-            <th>Pacote</th>
-            <th>Vidas</th>
-            <th>Total (R$)</th>
+            <th>Código</th>
+            <th>Cliente / Descrição</th>
             <th>Status</th>
+            <th>Envio</th>
+            <th>Validade</th>
+            <th>Serviços (R$)</th>
+            <th>Materiais (R$)</th>
+            <th>Total (R$)</th>
             <th>Responsável</th>
-            <th>Data</th>
             <th class="text-end">Ações</th>
           </tr>
         </thead>
         <tbody>
           <?php if(!$propostas): ?>
-            <tr><td colspan="9" class="text-center py-3">Nenhuma proposta encontrada.</td></tr>
+            <tr><td colspan="10" class="text-center py-3">Nenhuma proposta encontrada.</td></tr>
           <?php else: foreach($propostas as $p): ?>
             <?php
               $badge = match ($p['status']) {
@@ -134,18 +143,44 @@ ob_start();
                 'expirada' => 'secondary',
                 default => 'warning text-dark'
               };
+              $desc = trim((string)($p['descricao'] ?? ''));
+              if ($desc !== '') {
+                  if (function_exists('mb_strimwidth')) {
+                      $desc = mb_strimwidth($desc, 0, 80, '...');
+                  } else {
+                      $desc = strlen($desc) > 80 ? substr($desc, 0, 77) . '...' : $desc;
+                  }
+              }
+              $dataEnvio = !empty($p['data_envio']) ? date('d/m/Y H:i', strtotime($p['data_envio'])) : '-';
+              $validade = isset($p['validade_dias']) && $p['validade_dias'] !== null ? ((int)$p['validade_dias'] . ' dias') : '-';
+              $codigo = $p['codigo_proposta'] ?? null;
             ?>
             <tr>
-              <td><?= (int)$p['id'] ?></td>
-              <td><?= e($p['nome_fantasia']) ?></td>
-              <td><?= e($p['pacote']) ?></td>
-              <td><?= (int)$p['qtd_colaboradores'] ?></td>
-              <td><?= number_format((float)$p['total_geral'], 2, ',', '.') ?></td>
+              <td>
+                <div class="fw-semibold">#<?= (int)$p['id'] ?></div>
+                <div class="text-muted small"><?= e($codigo ?: '-') ?></div>
+              </td>
+              <td>
+                <div class="fw-semibold"><?= e($p['nome_fantasia']) ?></div>
+                <?php if ($desc !== ''): ?>
+                  <div class="text-muted small"><?= e($desc) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($p['pacote'])): ?>
+                  <div class="mt-1"><span class="badge bg-light text-dark border">Pacote: <?= e($p['pacote']) ?></span></div>
+                <?php endif; ?>
+              </td>
               <td><span class="badge bg-<?= $badge ?>"><?= e(ucfirst($p['status'])) ?></span></td>
+              <td><?= e($dataEnvio) ?></td>
+              <td><?= e($validade) ?></td>
+              <td><?= number_format((float)($p['total_servicos'] ?? 0), 2, ',', '.') ?></td>
+              <td><?= number_format((float)($p['total_materiais'] ?? 0), 2, ',', '.') ?></td>
+              <td class="fw-semibold"><?= number_format((float)($p['total_geral'] ?? 0), 2, ',', '.') ?></td>
               <td><?= e($p['usuario_nome'] ?? '-') ?></td>
-              <td><?= e($p['criado_em']) ?></td>
               <td class="text-end">
-                <a href="<?= e(app_url('propostas/ver.php?id=' . (int)$p['id'])) ?>" class="btn btn-sm btn-outline-primary">Ver</a>
+                <div class="btn-group btn-group-sm" role="group">
+                  <a href="<?= e(app_url('propostas/ver.php?id=' . (int)$p['id'])) ?>" class="btn btn-outline-primary">Ver</a>
+                  <a href="<?= e(app_url('propostas/editar.php?id=' . (int)$p['id'])) ?>" class="btn btn-outline-secondary">Editar</a>
+                </div>
               </td>
             </tr>
           <?php endforeach; endif; ?>

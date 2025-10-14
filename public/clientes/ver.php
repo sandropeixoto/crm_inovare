@@ -16,7 +16,7 @@ if (!$cliente) {
 
 log_user_action(current_user()['id'] ?? null, 'Visualizou cliente', 'clientes', $id, null, $cliente);
 
-$propostas = run_query("SELECT p.id, pa.nome AS pacote, p.status, p.criado_em FROM propostas p LEFT JOIN pacotes pa ON pa.id=p.id_pacote WHERE p.id_cliente=? ORDER BY p.id DESC LIMIT 5", [$id]);
+$propostas = run_query("SELECT p.id, p.codigo_proposta, p.descricao, p.status, p.data_envio, p.total_geral, pa.nome AS pacote FROM propostas p LEFT JOIN pacotes pa ON pa.id=p.id_pacote WHERE p.id_cliente=? ORDER BY p.id DESC LIMIT 5", [$id]);
 $interacoes = run_query("SELECT i.*, u.nome AS usuario FROM interacoes i LEFT JOIN usuarios u ON u.id=i.id_usuario WHERE i.id_cliente=? ORDER BY i.id DESC LIMIT 5", [$id]);
 
 $page_title = 'Cliente: ' . $cliente['nome_fantasia'];
@@ -85,37 +85,53 @@ ob_start();
     <div class="card h-100 shadow-sm">
       <div class="card-header bg-white fw-semibold">Últimas Propostas</div>
       <div class="card-body p-0">
-        <table class="table table-sm mb-0">
-          <thead class="table-light">
-            <tr><th>ID</th><th>Pacote</th><th>Status</th><th>Data</th></tr>
-          </thead>
-          <tbody>
-            <?php if (!$propostas): ?>
-              <tr><td colspan="4" class="text-center py-3">Nenhuma proposta registrada.</td></tr>
-            <?php else: ?>
-              <?php foreach ($propostas as $p): ?>
-                <?php
-                  $badge = match ($p['status']) {
-                    'aceita' => 'success',
-                    'enviada' => 'primary',
-                    'rejeitada' => 'danger',
-                    default => 'secondary'
-                  };
-                ?>
-                <tr>
-                  <td><?= (int)$p['id'] ?></td>
-                  <td><?= e($p['pacote']) ?></td>
-                  <td><span class="badge bg-<?= $badge ?>"><?= e(ucfirst($p['status'])) ?></span></td>
-                  <td><?= e($p['criado_em']) ?></td>
-                </tr>
-              <?php endforeach; ?>
-            <?php endif; ?>
-          </tbody>
-        </table>
-      </div>
-      <div class="card-footer text-end">
-        <a href="<?= e(app_url('propostas/listar.php?cliente_id=' . (int)$cliente['id'])) ?>" class="btn btn-sm btn-outline-primary">Ver todas</a>
-      </div>
+          <table class="table table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Código</th>
+                <th>Status</th>
+                <th>Total (R$)</th>
+                <th>Envio</th>
+                <th class="text-end">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php if (!$propostas): ?>
+                <tr><td colspan="5" class="text-center py-3">Nenhuma proposta registrada.</td></tr>
+              <?php else: ?>
+                <?php foreach ($propostas as $p): ?>
+                  <?php
+                    $badge = match ($p['status']) {
+                      'aceita' => 'success',
+                      'enviada' => 'primary',
+                      'rejeitada' => 'danger',
+                      default => 'secondary'
+                    };
+                    $codigo = $p['codigo_proposta'] ?: '#' . $p['id'];
+                    $dataEnvio = !empty($p['data_envio']) ? date('d/m/Y', strtotime((string)$p['data_envio'])) : '-';
+                  ?>
+                  <tr>
+                    <td>
+                      <div class="fw-semibold"><?= e($codigo) ?></div>
+                      <?php if (!empty($p['pacote'])): ?>
+                        <div class="text-muted small"><?= e($p['pacote']) ?></div>
+                      <?php endif; ?>
+                    </td>
+                    <td><span class="badge bg-<?= $badge ?>"><?= e(ucfirst($p['status'])) ?></span></td>
+                    <td><?= number_format((float)($p['total_geral'] ?? 0), 2, ',', '.') ?></td>
+                    <td><?= e($dataEnvio) ?></td>
+                    <td class="text-end">
+                      <a href="<?= e(app_url('propostas/ver.php?id=' . (int)$p['id'])) ?>" class="btn btn-sm btn-outline-primary">Ver</a>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer text-end">
+          <a href="<?= e(app_url('propostas/listar.php?cliente_id=' . (int)$cliente['id'] . '&cliente=' . urlencode($cliente['nome_fantasia']))) ?>" class="btn btn-sm btn-outline-primary">Ver todas</a>
+        </div>
     </div>
   </div>
   <div class="col-lg-6">

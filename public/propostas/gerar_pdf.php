@@ -6,28 +6,43 @@ require_role(['admin','gestor','comercial','visualizador']);
 
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) {
-    http_response_code(400);
-    exit('ID de proposta inválido.');
+    abort(400, 'ID de proposta inválido.');
 }
 
-// Carregar proposta e cliente
 $sql = "SELECT p.*, c.nome_fantasia, c.razao_social, c.cnpj, c.email AS email_cliente,
-               pa.nome AS pacote_nome, pa.descricao AS pacote_desc, pa.conformidade,
+               pa.nome AS pacote_nome, pa.descricao AS pacote_desc,
                u.nome AS usuario_nome
         FROM propostas p
-        JOIN clientes c ON c.id=p.id_cliente
-        LEFT JOIN pacotes pa ON pa.id=p.id_pacote
-        LEFT JOIN usuarios u ON u.id=p.id_usuario
-        WHERE p.id=?";
+        JOIN clientes c ON c.id = p.id_cliente
+        LEFT JOIN pacotes pa ON pa.id = p.id_pacote
+        LEFT JOIN usuarios u ON u.id = p.id_usuario
+        WHERE p.id = ?";
 $prop = run_query($sql, [$id])[0] ?? null;
-if (!$prop) exit('Proposta não encontrada.');
+if (!$prop) {
+    abort(404, 'Proposta não encontrada.');
+}
 
-// Carregar dados da configuração ativa
-$config = run_query("SELECT * FROM configuracoes WHERE ativo=1 ORDER BY id DESC LIMIT 1")[0] ?? null;
+$itens = run_query('SELECT * FROM proposta_itens WHERE id_proposta = ? ORDER BY id ASC', [$id]);
+$config = run_query('SELECT * FROM configuracoes WHERE ativo=1 ORDER BY id DESC LIMIT 1')[0] ?? null;
 
-log_user_action($_SESSION['user']['id'], 'Gerou PDF da proposta', 'propostas', $id, null, $prop);
+log_user_action(current_user()['id'] ?? null, 'Gerou PDF da proposta', 'propostas', $id, null, $prop);
 
-// HTML do PDF
+function h(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
+
+$codigoDisplay = $prop['codigo_proposta'] ?: '#' . $prop['id'];
+$statusLabel = ucfirst((string)$prop['status']);
+$dataEnvio = !empty($prop['data_envio']) ? date('d/m/Y H:i', strtotime((string)$prop['data_envio'])) : '-';
+$validade = is_numeric($prop['validade_dias']) ? ((int)$prop['validade_dias'] . ' dias') : '-';
+$criadoEm = !empty($prop['criado_em']) ? date('d/m/Y H:i', strtotime((string)$prop['criado_em'])) : date('d/m/Y');
+$totalServicos = number_format((float)($prop['total_servicos'] ?? 0), 2, ',', '.');
+$totalMateriais = number_format((float)($prop['total_materiais'] ?? 0), 2, ',', '.');
+$totalGeral = number_format((float)($prop['total_geral'] ?? 0), 2, ',', '.');
+$descricao = trim((string)($prop['descricao'] ?? ''));
+$observacoes = trim((string)($prop['observacoes'] ?? ''));
+
 ob_start();
 ?>
 <!DOCTYPE html>
@@ -35,93 +50,127 @@ ob_start();
 <head>
 <meta charset="utf-8">
 <style>
-body { font-family: DejaVu Sans, sans-serif; font-size: 12px; color:#333; }
-h1,h2,h3,h4 { color:#002b5c; margin-bottom:5px; }
-.header { text-align:center; border-bottom:2px solid #002b5c; padding-bottom:10px; }
-.header img { max-height:60px; }
-.section { margin-top:20px; }
-.table { width:100%; border-collapse:collapse; margin-top:10px; }
-.table th, .table td { border:1px solid #ccc; padding:6px 8px; }
-.table th { background:#f2f2f2; }
-.footer { text-align:center; font-size:10px; margin-top:30px; color:#666; }
+body { font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #333; }
+h1,h2,h3,h4 { color: #0b3d60; margin-bottom: 6px; }
+.header { text-align: center; border-bottom: 2px solid #0b3d60; padding-bottom: 10px; margin-bottom: 15px; }
+.header img { max-height: 60px; margin-bottom: 5px; }
+.section { margin-top: 18px; }
+.table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.table th, .table td { border: 1px solid #cfcfcf; padding: 6px 8px; }
+.table th { background: #f1f3f5; text-align: left; }
+.totais td { font-weight: bold; }
+.footer { text-align: center; font-size: 9px; margin-top: 25px; color: #666; }
+.small { font-size: 10px; color: #555; }
 </style>
 </head>
 <body>
 <div class="header">
-  <?php if(!empty($config['logotipo_url'])): ?>
-    <img src="<?= htmlspecialchars($config['logotipo_url']) ?>" alt="Logo">
+  <?php if (!empty($config['logotipo_url'])): ?>
+    <img src="<?= h($config['logotipo_url']) ?>" alt="Logo">
   <?php endif; ?>
-  <h2><?= htmlspecialchars($config['empresa_nome'] ?? 'Empresa') ?></h2>
+  <h2><?= h($config['empresa_nome'] ?? 'Inovare Soluções em Saúde') ?></h2>
+  <div class="small">Proposta comercial <?= h($codigoDisplay) ?> | Status: <?= h($statusLabel) ?></div>
 </div>
 
 <div class="section">
-  <h3>Proposta Comercial - NR-01</h3>
-  <p><strong>Número:</strong> #<?= (int)$prop['id'] ?>  
-     <strong>Data:</strong> <?= date('d/m/Y', strtotime($prop['criado_at'] ?? 'now')) ?></p>
-</div>
-
-<div class="section">
-  <h4>Cliente</h4>
+  <h3>Informações do Cliente</h3>
   <table class="table">
-    <tr><th>Nome Fantasia</th><td><?= htmlspecialchars($prop['nome_fantasia']) ?></td></tr>
-    <tr><th>Razão Social</th><td><?= htmlspecialchars($prop['razao_social']) ?></td></tr>
-    <tr><th>CNPJ</th><td><?= htmlspecialchars($prop['cnpj']) ?></td></tr>
-    <tr><th>E-mail</th><td><?= htmlspecialchars($prop['email_cliente']) ?></td></tr>
+    <tr><th>Nome fantasia</th><td><?= h($prop['nome_fantasia']) ?></td></tr>
+    <tr><th>Razão social</th><td><?= h($prop['razao_social'] ?? '-') ?></td></tr>
+    <tr><th>CNPJ</th><td><?= h($prop['cnpj'] ?? '-') ?></td></tr>
+    <tr><th>E-mail</th><td><?= h($prop['email_cliente'] ?? '-') ?></td></tr>
   </table>
 </div>
 
 <div class="section">
-  <h4>Informações do Pacote</h4>
+  <h3>Resumo da Proposta</h3>
   <table class="table">
-    <tr><th>Pacote</th><td><?= htmlspecialchars($prop['pacote_nome']) ?></td></tr>
-    <tr><th>Descrição</th><td><?= htmlspecialchars($prop['pacote_desc']) ?></td></tr>
-    <tr><th>Conformidade</th><td><?= htmlspecialchars($prop['conformidade']) ?></td></tr>
-    <tr><th>Quantidade de Vidas</th><td><?= (int)$prop['qtd_colaboradores'] ?></td></tr>
+    <tr>
+      <th>Responsável</th><td><?= h($prop['usuario_nome'] ?? '-') ?></td>
+      <th>Data de envio</th><td><?= h($dataEnvio) ?></td>
+    </tr>
+    <tr>
+      <th>Validade</th><td><?= h($validade) ?></td>
+      <th>Emitida em</th><td><?= h($criadoEm) ?></td>
+    </tr>
+    <tr>
+      <th>Pacote</th><td colspan="3"><?= h($prop['pacote_nome'] ?? 'Não vinculado') ?></td>
+    </tr>
+  </table>
+
+  <table class="table totais">
+    <tr>
+      <td>Total em serviços: R$ <?= $totalServicos ?></td>
+      <td>Total em materiais: R$ <?= $totalMateriais ?></td>
+      <td>Valor total: R$ <?= $totalGeral ?></td>
+    </tr>
   </table>
 </div>
 
+<?php if ($descricao !== ''): ?>
 <div class="section">
-  <h4>Investimento</h4>
+  <h3>Descrição</h3>
+  <p><?= nl2br(h($descricao)) ?></p>
+</div>
+<?php endif; ?>
+
+<div class="section">
+  <h3>Itens da Proposta</h3>
   <table class="table">
-    <tr><th>Implantação</th><td>R$ <?= number_format($prop['valor_implantacao'],2,',','.') ?></td></tr>
-    <tr><th>Mensal</th><td>R$ <?= number_format($prop['valor_mensal'],2,',','.') ?></td></tr>
-    <tr><th>Total</th><td><strong>R$ <?= number_format($prop['total_geral'],2,',','.') ?></strong></td></tr>
+    <thead>
+      <tr>
+        <th style="width:5%">#</th>
+        <th style="width:15%">Tipo</th>
+        <th>Descrição</th>
+        <th style="width:12%">Quantidade</th>
+        <th style="width:15%">Valor unitário (R$)</th>
+        <th style="width:15%">Valor total (R$)</th>
+      </tr>
+    </thead>
+    <tbody>
+    <?php if (!$itens): ?>
+      <tr><td colspan="6" style="text-align:center; padding:12px;">Nenhum item cadastrado.</td></tr>
+    <?php else: ?>
+      <?php foreach ($itens as $idx => $item): ?>
+        <tr>
+          <td><?= $idx + 1 ?></td>
+          <td><?= h(ucfirst($item['tipo_item'] ?? 'serviço')) ?></td>
+          <td><?= h($item['descricao_item'] ?? '') ?></td>
+          <td style="text-align:right;"><?= number_format((float)($item['quantidade'] ?? 0), 2, ',', '.') ?></td>
+          <td style="text-align:right;"><?= number_format((float)($item['valor_unitario'] ?? 0), 2, ',', '.') ?></td>
+          <td style="text-align:right; font-weight:600;"><?= number_format((float)($item['valor_total'] ?? 0), 2, ',', '.') ?></td>
+        </tr>
+      <?php endforeach; ?>
+    <?php endif; ?>
+    </tbody>
   </table>
 </div>
 
+<?php if ($observacoes !== ''): ?>
 <div class="section">
-  <h4>Observações</h4>
-  <p>
-    Esta proposta contempla a implementação do Programa Integrado de Saúde Ocupacional,
-    Emocional e de Conformidade com a NR-01, garantindo:
-  </p>
-  <ul>
-    <li>Conformidade legal com a NR-01;</li>
-    <li>Prevenção de riscos psicossociais e suporte especializado;</li>
-    <li>Cuidado integral e educação continuada em saúde;</li>
-    <li>Suporte técnico ao RH e SESMT na gestão de riscos.</li>
-  </ul>
+  <h3>Observações</h3>
+  <p><?= nl2br(h($observacoes)) ?></p>
 </div>
+<?php endif; ?>
 
 <div class="section">
-  <p><strong>Emitido por:</strong> <?= htmlspecialchars($prop['usuario_nome']) ?><br>
-     <strong>Data:</strong> <?= date('d/m/Y') ?></p>
+  <p><strong>Responsável comercial:</strong> <?= h($prop['usuario_nome'] ?? '-') ?><br>
+     <strong>Data de emissão:</strong> <?= h(date('d/m/Y')) ?></p>
 </div>
 
 <div class="footer">
-  <?php if(!empty($config['endereco'])): ?><?= htmlspecialchars($config['endereco']) ?><br><?php endif; ?>
-  <?php if(!empty($config['email_contato'])): ?>📧 <?= htmlspecialchars($config['email_contato']) ?><br><?php endif; ?>
-  <?php if(!empty($config['telefone'])): ?>📱 <?= htmlspecialchars($config['telefone']) ?><br><?php endif; ?>
-  <?php if(!empty($config['instagram'])): ?>Instagram: <?= htmlspecialchars($config['instagram']) ?><br><?php endif; ?>
-  <?= htmlspecialchars($config['rodape']) ?>
+  <?php if (!empty($config['endereco'])): ?><?= h($config['endereco']) ?><br><?php endif; ?>
+  <?php if (!empty($config['telefone'])): ?>Telefone: <?= h($config['telefone']) ?><br><?php endif; ?>
+  <?php if (!empty($config['email_contato'])): ?>E-mail: <?= h($config['email_contato']) ?><br><?php endif; ?>
+  <?php if (!empty($config['instagram'])): ?>Instagram: <?= h($config['instagram']) ?><br><?php endif; ?>
+  <?= h($config['rodape'] ?? 'Inovare Soluções em Saúde') ?>
 </div>
 </body>
 </html>
 <?php
 $html = ob_get_clean();
 
-// === GERAÇÃO DO PDF ===
-require_once __DIR__ . '/../../vendor/autoload.php'; // dompdf precisa estar instalado
+require_once __DIR__ . '/../../vendor/autoload.php';
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -133,5 +182,5 @@ $pdf = new Dompdf($options);
 $pdf->loadHtml($html);
 $pdf->setPaper('A4', 'portrait');
 $pdf->render();
-$pdf->stream("Proposta_{$prop['id']}.pdf", ["Attachment" => false]);
+$pdf->stream('Proposta_' . $prop['id'] . '.pdf', ['Attachment' => false]);
 exit;

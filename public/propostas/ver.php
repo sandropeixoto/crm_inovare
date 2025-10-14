@@ -5,117 +5,205 @@ require_role(['admin','gestor','comercial','visualizador']);
 
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) {
-    http_response_code(400);
-    exit('ID de proposta inválido.');
+    abort(400, 'ID de proposta inválido.');
 }
 
-// busca proposta
 $sql = "SELECT p.*, c.nome_fantasia, c.razao_social, c.cnpj, c.email AS email_cliente,
-               pa.nome AS pacote_nome, pa.descricao AS pacote_desc, pa.conformidade,
+               pa.nome AS pacote_nome, pa.descricao AS pacote_desc,
                u.nome AS usuario_nome
         FROM propostas p
-        JOIN clientes c ON c.id=p.id_cliente
-        LEFT JOIN pacotes pa ON pa.id=p.id_pacote
-        LEFT JOIN usuarios u ON u.id=p.id_usuario
-        WHERE p.id=?";
+        JOIN clientes c ON c.id = p.id_cliente
+        LEFT JOIN pacotes pa ON pa.id = p.id_pacote
+        LEFT JOIN usuarios u ON u.id = p.id_usuario
+        WHERE p.id = ?";
 $prop = run_query($sql, [$id])[0] ?? null;
 
 if (!$prop) {
-    http_response_code(404);
-    exit('Proposta não encontrada.');
+    abort(404, 'Proposta não encontrada.');
 }
 
-log_user_action($_SESSION['user']['id'], 'Visualizou proposta', 'propostas', $id, null, $prop);
+$itens = run_query('SELECT * FROM proposta_itens WHERE id_proposta = ? ORDER BY id ASC', [$id]);
 
-function h($s){return htmlspecialchars((string)$s,ENT_QUOTES,'UTF-8');}
-?>
-<!DOCTYPE html>
+log_user_action(current_user()['id'] ?? null, 'Visualizou proposta', 'propostas', $id, null, $prop);
+
+function h(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
+
+$codigoDisplay = $prop['codigo_proposta'] ?: '#' . $prop['id'];
+$badgeClass = match ($prop['status']) {
+    'aceita' => 'success',
+    'enviada' => 'primary',
+    'rejeitada' => 'danger',
+    'expirada' => 'secondary',
+    default => 'warning text-dark',
+};
+$dataEnvio = !empty($prop['data_envio']) ? date('d/m/Y H:i', strtotime((string)$prop['data_envio'])) : '-';
+$validade = is_numeric($prop['validade_dias']) ? ((int)$prop['validade_dias'] . ' dias') : '-';
+$criadoEm = !empty($prop['criado_em']) ? date('d/m/Y H:i', strtotime((string)$prop['criado_em'])) : '-';
+$atualizadoEm = !empty($prop['atualizado_em']) ? date('d/m/Y H:i', strtotime((string)$prop['atualizado_em'])) : '-';
+$totalServicos = number_format((float)($prop['total_servicos'] ?? 0), 2, ',', '.');
+$totalMateriais = number_format((float)($prop['total_materiais'] ?? 0), 2, ',', '.');
+$totalGeral = number_format((float)($prop['total_geral'] ?? 0), 2, ',', '.');
+$descricao = trim((string)($prop['descricao'] ?? ''));
+$observacoes = trim((string)($prop['observacoes'] ?? ''));
+
+?><!DOCTYPE html>
 <html lang="pt-br">
 <head>
 <meta charset="utf-8">
-<title>Proposta #<?= (int)$prop['id'] ?> - <?= h($prop['nome_fantasia']) ?></title>
+<title>Proposta <?= h($codigoDisplay) ?> - <?= h($prop['nome_fantasia']) ?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
-body {background-color:#f8f9fa;}
-.card-header h5 {margin:0;}
-.tabela th {background:#e9ecef;}
+body { background-color: #f8f9fa; }
+.badge-status { font-size: 0.85rem; }
+.totais-card .value { font-size: 1.25rem; font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="container mt-4 mb-5">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4>Proposta #<?= (int)$prop['id'] ?></h4>
+  <div class="d-flex flex-wrap justify-content-between align-items-start mb-4 gap-3">
     <div>
-      <a href="listar.php" class="btn btn-secondary">Voltar</a>
-      <a href="gerar_pdf.php?id=<?= $prop['id'] ?>" class="btn btn-outline-danger">Gerar PDF</a>
+      <h4 class="mb-1">Proposta <?= h($codigoDisplay) ?></h4>
+      <div class="text-muted">Cliente: <?= h($prop['nome_fantasia']) ?></div>
+    </div>
+    <div class="btn-group" role="group">
+      <a href="listar.php" class="btn btn-outline-secondary">Voltar</a>
+      <a href="editar.php?id=<?= (int)$prop['id'] ?>" class="btn btn-primary">Editar</a>
+      <a href="gerar_pdf.php?id=<?= (int)$prop['id'] ?>" class="btn btn-outline-danger">Gerar PDF</a>
     </div>
   </div>
 
-  <div class="card shadow-sm mb-3">
-    <div class="card-header bg-white">
-      <h5>Dados do Cliente</h5>
-    </div>
-    <div class="card-body">
-      <div class="row mb-2">
-        <div class="col-md-6"><strong>Nome Fantasia:</strong> <?= h($prop['nome_fantasia']) ?></div>
-        <div class="col-md-6"><strong>Razão Social:</strong> <?= h($prop['razao_social']) ?></div>
+  <div class="row g-3 mb-4">
+    <div class="col-lg-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="fw-bold text-primary">Status da Proposta</h6>
+          <p class="mb-2">
+            <span class="badge badge-status bg-<?= $badgeClass ?>"><?= h(ucfirst((string)$prop['status'])) ?></span>
+          </p>
+          <ul class="list-unstyled small mb-0">
+            <li><strong>Responsável:</strong> <?= h($prop['usuario_nome'] ?? '-') ?></li>
+            <li><strong>Pacote:</strong> <?= h($prop['pacote_nome'] ?? 'Não vinculado') ?></li>
+            <li><strong>Data de envio:</strong> <?= h($dataEnvio) ?></li>
+            <li><strong>Validade:</strong> <?= h($validade) ?></li>
+            <li><strong>Criada em:</strong> <?= h($criadoEm) ?></li>
+            <li><strong>Última atualização:</strong> <?= h($atualizadoEm) ?></li>
+          </ul>
+        </div>
       </div>
-      <div class="row mb-2">
-        <div class="col-md-4"><strong>CNPJ:</strong> <?= h($prop['cnpj']) ?></div>
-        <div class="col-md-4"><strong>E-mail:</strong> <?= h($prop['email_cliente']) ?></div>
-        <div class="col-md-4"><strong>Responsável:</strong> <?= h($prop['usuario_nome']) ?></div>
+    </div>
+    <div class="col-lg-8">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="fw-bold text-primary mb-3">Dados do Cliente</h6>
+          <div class="row g-3 small">
+            <div class="col-md-6">
+              <strong>Razão social:</strong><br><?= h($prop['razao_social'] ?? '-') ?>
+            </div>
+            <div class="col-md-6">
+              <strong>CNPJ:</strong><br><?= h($prop['cnpj'] ?? '-') ?>
+            </div>
+            <div class="col-md-6">
+              <strong>E-mail:</strong><br><?= h($prop['email_cliente'] ?? '-') ?>
+            </div>
+            <div class="col-md-6">
+              <strong>Contato responsável:</strong><br><?= h($prop['usuario_nome'] ?? '-') ?>
+            </div>
+          </div>
+          <?php if (!empty($prop['pacote_desc'])): ?>
+            <hr>
+            <div class="small">
+              <strong>Resumo do pacote:</strong>
+              <p class="mb-0"><?= nl2br(h((string)$prop['pacote_desc'])) ?></p>
+            </div>
+          <?php endif; ?>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="card shadow-sm mb-3">
-    <div class="card-header bg-white">
-      <h5>Informações da Proposta</h5>
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm totais-card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Total em serviços</div>
+          <div class="value text-primary">R$ <?= $totalServicos ?></div>
+        </div>
+      </div>
     </div>
-    <div class="card-body">
-      <table class="table tabela table-bordered">
-        <tr><th>Pacote</th><td><?= h($prop['pacote_nome']) ?></td></tr>
-        <tr><th>Descrição</th><td><?= h($prop['pacote_desc']) ?></td></tr>
-        <tr><th>Conformidade</th><td><?= h($prop['conformidade']) ?></td></tr>
-        <tr><th>Quantidade de Vidas</th><td><?= (int)$prop['qtd_colaboradores'] ?></td></tr>
-        <tr><th>Implantação</th><td>R$ <?= number_format($prop['valor_implantacao'],2,',','.') ?></td></tr>
-        <tr><th>Mensalidade</th><td>R$ <?= number_format($prop['valor_mensal'],2,',','.') ?></td></tr>
-        <tr><th>Total Geral</th><td class="fw-bold">R$ <?= number_format($prop['total_geral'],2,',','.') ?></td></tr>
-        <tr><th>Status</th><td>
-          <span class="badge bg-<?= $prop['status']==='aceita'?'success':($prop['status']==='enviada'?'primary':($prop['status']==='rejeitada'?'danger':'secondary')) ?>">
-            <?= ucfirst($prop['status']) ?>
-          </span>
-        </td></tr>
-      </table>
+    <div class="col-md-4">
+      <div class="card shadow-sm totais-card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Total em materiais</div>
+          <div class="value text-primary">R$ <?= $totalMateriais ?></div>
+        </div>
+      </div>
     </div>
-  </div>
-
-  <div class="card shadow-sm mb-3">
-    <div class="card-header bg-white">
-      <h5>Observações</h5>
-    </div>
-    <div class="card-body">
-      <p>
-        Esta proposta integra o Programa de Saúde Ocupacional, Emocional e de Conformidade com a NR-01,
-        desenvolvido pela <strong>Inovare Soluções em Saúde</strong>, garantindo:
-      </p>
-      <ul>
-        <li>Conformidade legal com a NR-01;</li>
-        <li>Prevenção de riscos psicossociais e suporte especializado;</li>
-        <li>Cuidado integral e educação continuada em saúde ocupacional;</li>
-        <li>Suporte técnico ao RH e SESMT na gestão de riscos.</li>
-      </ul>
-      <p>Emitido em <strong><?= date('d/m/Y') ?></strong>.</p>
+    <div class="col-md-4">
+      <div class="card shadow-sm totais-card h-100 border-primary">
+        <div class="card-body">
+          <div class="text-muted small">Valor total da proposta</div>
+          <div class="value text-success">R$ <?= $totalGeral ?></div>
+        </div>
+      </div>
     </div>
   </div>
 
+  <?php if ($descricao !== ''): ?>
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-white fw-bold">Descrição da proposta</div>
+    <div class="card-body">
+      <p class="mb-0"><?= nl2br(h($descricao)) ?></p>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-white fw-bold">Itens da proposta</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Tipo</th>
+              <th>Descrição</th>
+              <th class="text-end">Quantidade</th>
+              <th class="text-end">Valor unitário (R$)</th>
+              <th class="text-end">Valor total (R$)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php if (!$itens): ?>
+              <tr><td colspan="6" class="text-center py-3">Nenhum item cadastrado.</td></tr>
+            <?php else: ?>
+              <?php foreach ($itens as $idx => $item): ?>
+                <tr>
+                  <td><?= $idx + 1 ?></td>
+                  <td><?= h(ucfirst($item['tipo_item'] ?? 'serviço')) ?></td>
+                  <td><?= h($item['descricao_item'] ?? '') ?></td>
+                  <td class="text-end"><?= number_format((float)($item['quantidade'] ?? 0), 2, ',', '.') ?></td>
+                  <td class="text-end"><?= number_format((float)($item['valor_unitario'] ?? 0), 2, ',', '.') ?></td>
+                  <td class="text-end fw-semibold"><?= number_format((float)($item['valor_total'] ?? 0), 2, ',', '.') ?></td>
+                </tr>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <?php if ($observacoes !== ''): ?>
   <div class="card shadow-sm">
-    <div class="card-body text-center text-muted small">
-      Inovare Soluções em Saúde<br>
-      Tv. Humaitá, 1733 – 1º andar, Sala 02 – Pedreira – Belém/PA<br>
-      📧 diretoria@inovaress.com | 📱 Instagram: @inovaresolucoesemsaude
+    <div class="card-header bg-white fw-bold">Observações</div>
+    <div class="card-body">
+      <p class="mb-0"><?= nl2br(h($observacoes)) ?></p>
     </div>
   </div>
+  <?php endif; ?>
 </div>
 </body>
 </html>

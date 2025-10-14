@@ -1,0 +1,669 @@
+<?php
+require_once __DIR__ . '/../../config/db.php';
+
+ensure_session_security();
+require_role(['admin','gestor','comercial']);
+
+$allowedStatus = ['rascunho','enviada','aceita','rejeitada','expirada'];
+
+$idFromRequest = (int)($_GET['id'] ?? 0);
+$idFromPost = (int)($_POST['id'] ?? 0);
+$propostaId = $idFromPost ?: $idFromRequest;
+$editando = $propostaId > 0;
+
+$clientes = run_query('SELECT id, nome_fantasia FROM clientes ORDER BY nome_fantasia ASC');
+$pacotes = run_query('SELECT id, nome FROM pacotes WHERE ativo = 1 ORDER BY nome ASC');
+
+$propostaAtual = null;
+$itensAtuais = [];
+if ($editando) {
+    $propostaAtual = run_query('SELECT * FROM propostas WHERE id = ?', [$propostaId])[0] ?? null;
+    if (!$propostaAtual) {
+        abort(404, 'Proposta não encontrada.');
+    }
+
+    $itensAtuais = run_query('SELECT * FROM proposta_itens WHERE id_proposta = ? ORDER BY id ASC', [$propostaId]);
+}
+
+$formData = [
+    'id' => $propostaId,
+    'id_cliente' => $propostaAtual['id_cliente'] ?? (int)($_GET['cliente_id'] ?? 0),
+    'id_pacote' => $propostaAtual['id_pacote'] ?? null,
+    'descricao' => $propostaAtual['descricao'] ?? '',
+    'observacoes' => $propostaAtual['observacoes'] ?? '',
+    'data_envio' => !empty($propostaAtual['data_envio']) ? date('Y-m-d\TH:i', strtotime($propostaAtual['data_envio'])) : '',
+    'validade_dias' => $propostaAtual['validade_dias'] ?? '',
+    'status' => $propostaAtual['status'] ?? 'rascunho',
+];
+
+$itensForm = array_map(static function (array $item): array {
+    return [
+        'tipo_item' => $item['tipo_item'],
+        'descricao_item' => $item['descricao_item'],
+        'quantidade' => (float)$item['quantidade'],
+        'valor_unitario' => (float)$item['valor_unitario'],
+        'valor_total' => (float)$item['valor_total'],
+    ];
+}, $itensAtuais);
+
+$errors = [];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    validate_csrf_token($_POST['_token'] ?? null);
+
+    $formData['id_cliente'] = (int)($_POST['id_cliente'] ?? 0);
+    $formData['id_pacote'] = isset($_POST['id_pacote']) && $_POST['id_pacote'] !== '' ? (int)$_POST['id_pacote'] : null;
+    $formData['descricao'] = trim($_POST['descricao'] ?? '');
+    $formData['observacoes'] = trim($_POST['observacoes'] ?? '');
+    $formData['data_envio'] = trim($_POST['data_envio'] ?? '');
+    $formData['validade_dias'] = $_POST['validade_dias'] === '' ? '' : (int)$_POST['validade_dias'];
+    $formData['status'] = in_array($_POST['status'] ?? '', $allowedStatus, true) ? $_POST['status'] : 'rascunho';
+
+    // Validação básica dos dados gerais
+    if ($formData['id_cliente'] <= 0) {
+        $errors[] = 'Selecione um cliente válido.';
+    } else {
+        $clienteExiste = run_query('SELECT id FROM clientes WHERE id = ?', [$formData['id_cliente']]);
+        if (!$clienteExiste) {
+            $errors[] = 'O cliente informado não foi encontrado.';
+        }
+    }
+
+    if ($formData['id_pacote']) {
+        $pacoteExiste = run_query('SELECT id FROM pacotes WHERE id = ?', [$formData['id_pacote']]);
+        if (!$pacoteExiste) {
+            $errors[] = 'O pacote selecionado não é válido.';
+        }
+    }
+
+    if ($formData['descricao'] === '') {
+        $errors[] = 'Informe uma descrição para a proposta.';
+    }
+
+    $dataEnvioDb = null;
+    if ($formData['data_envio'] !== '') {
+        $parse = str_replace('T', ' ', $formData['data_envio']);
+        $timestamp = strtotime($parse);
+        if ($timestamp === false) {
+            $errors[] = 'Informe uma data de envio válida.';
+        } else {
+            $dataEnvioDb = date('Y-m-d H:i:s', $timestamp);
+        }
+    }
+
+    $validadeDias = $formData['validade_dias'] === '' ? null : (int)$formData['validade_dias'];
+    if ($validadeDias !== null && $validadeDias < 0) {
+        $errors[] = 'A validade deve ser um número positivo de dias.';
+    }
+
+    if ($formData['status'] === 'aceita') {
+        if ($dataEnvioDb === null) {
+            $errors[] = 'Propostas aceitas precisam da data de envio preenchida.';
+        }
+        if ($validadeDias === null || $validadeDias <= 0) {
+            $errors[] = 'Propostas aceitas precisam de validade em dias maior que zero.';
+        }
+    }
+
+    // Processa itens
+    $postedItems = $_POST['items'] ?? [];
+    $parsedItems = [];
+    if (is_array($postedItems)) {
+        foreach ($postedItems as $item) {
+            $descricaoItem = trim($item['descricao_item'] ?? '');
+            $tipoItem = in_array($item['tipo_item'] ?? 'servico', ['servico', 'material'], true)
+                ? $item['tipo_item']
+                : 'servico';
+            $quantidade = isset($item['quantidade']) ? (float)$item['quantidade'] : 0.0;
+            $valorUnitario = isset($item['valor_unitario']) ? (float)$item['valor_unitario'] : 0.0;
+
+            if ($descricaoItem === '' && $quantidade <= 0 && $valorUnitario <= 0) {
+                continue; // ignora linhas em branco
+            }
+
+            if ($descricaoItem === '') {
+                $errors[] = 'Informe a descrição de todos os itens adicionados.';
+                break;
+            }
+
+            if ($quantidade <= 0) {
+                $errors[] = 'Itens precisam ter quantidade maior que zero.';
+                break;
+            }
+
+            if ($valorUnitario < 0) {
+                $errors[] = 'Itens não podem ter valor unitário negativo.';
+                break;
+            }
+
+            $valorTotal = round($quantidade * $valorUnitario, 2);
+
+            $parsedItems[] = [
+                'tipo_item' => $tipoItem,
+                'descricao_item' => $descricaoItem,
+                'quantidade' => round($quantidade, 2),
+                'valor_unitario' => round($valorUnitario, 2),
+                'valor_total' => $valorTotal,
+            ];
+        }
+    }
+
+    if (!$errors && count($parsedItems) === 0) {
+        $errors[] = 'Adicione pelo menos um item à proposta.';
+    }
+
+    $itensForm = $parsedItems ?: $itensForm;
+
+    $totalServicos = 0.0;
+    $totalMateriais = 0.0;
+    foreach ($parsedItems as $item) {
+        if ($item['tipo_item'] === 'material') {
+            $totalMateriais += $item['valor_total'];
+        } else {
+            $totalServicos += $item['valor_total'];
+        }
+    }
+    $totalServicos = round($totalServicos, 2);
+    $totalMateriais = round($totalMateriais, 2);
+    $totalGeral = round($totalServicos + $totalMateriais, 2);
+
+    if (!$errors) {
+        $pdo = pdo();
+        try {
+            $pdo->beginTransaction();
+
+            $dataToPersist = [
+                $formData['id_cliente'],
+                $formData['id_pacote'],
+                current_user()['id'] ?? null,
+                $formData['descricao'],
+                $formData['observacoes'] ?: null,
+                $dataEnvioDb,
+                $validadeDias,
+                $formData['status'],
+                $totalServicos,
+                $totalMateriais,
+                $totalGeral,
+            ];
+
+            if ($editando) {
+                $stmt = $pdo->prepare(
+                    'UPDATE propostas
+                     SET id_cliente = ?, id_pacote = ?, id_usuario = ?, descricao = ?, observacoes = ?, data_envio = ?, validade_dias = ?, status = ?,
+                         total_servicos = ?, total_materiais = ?, total_geral = ?
+                     WHERE id = ?'
+                );
+                $stmt->execute(array_merge($dataToPersist, [$propostaId]));
+
+                $pdo->prepare('DELETE FROM proposta_itens WHERE id_proposta = ?')->execute([$propostaId]);
+            } else {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO propostas (codigo_proposta, id_cliente, id_pacote, id_usuario, descricao, observacoes, data_envio, validade_dias, status, total_servicos, total_materiais, total_geral)
+                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $stmt->execute($dataToPersist);
+                $propostaId = (int)$pdo->lastInsertId();
+
+                $codigo = 'PROP-' . str_pad((string)$propostaId, 4, '0', STR_PAD_LEFT);
+                $pdo->prepare('UPDATE propostas SET codigo_proposta = ? WHERE id = ? AND codigo_proposta IS NULL')->execute([$codigo, $propostaId]);
+            }
+
+            $stmtItem = $pdo->prepare(
+                'INSERT INTO proposta_itens (id_proposta, tipo_item, descricao_item, quantidade, valor_unitario, valor_total)
+                 VALUES (?, ?, ?, ?, ?, ?)'
+            );
+            foreach ($parsedItems as $item) {
+                $stmtItem->execute([
+                    $propostaId,
+                    $item['tipo_item'],
+                    $item['descricao_item'],
+                    $item['quantidade'],
+                    $item['valor_unitario'],
+                    $item['valor_total'],
+                ]);
+            }
+
+            $pdo->commit();
+
+            $logAntes = $editando ? array_merge($propostaAtual ?? [], ['itens' => $itensAtuais]) : null;
+            $logDepois = [
+                'id_cliente' => $formData['id_cliente'],
+                'id_pacote' => $formData['id_pacote'],
+                'descricao' => $formData['descricao'],
+                'status' => $formData['status'],
+                'data_envio' => $dataEnvioDb,
+                'validade_dias' => $validadeDias,
+                'totais' => [
+                    'servicos' => $totalServicos,
+                    'materiais' => $totalMateriais,
+                    'geral' => $totalGeral,
+                ],
+                'itens' => $parsedItems,
+            ];
+
+            log_user_action(
+                current_user()['id'] ?? null,
+                $editando ? 'Atualizou proposta' : 'Criou proposta',
+                'propostas',
+                $propostaId,
+                $logAntes,
+                $logDepois
+            );
+
+            redirect(app_url('propostas/ver.php?id=' . $propostaId));
+        } catch (Throwable $e) {
+            if (isset($pdo) && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            log_system('error', 'Falha ao salvar proposta: ' . $e->getMessage(), __FILE__, __LINE__, $e->getTraceAsString());
+            $errors[] = 'Falha ao salvar a proposta. Tente novamente.';
+        }
+    }
+}
+
+// Totais iniciais para exibição
+$totalServicosInicial = 0.0;
+$totalMateriaisInicial = 0.0;
+foreach ($itensForm as $item) {
+    if (($item['tipo_item'] ?? 'servico') === 'material') {
+        $totalMateriaisInicial += (float)($item['valor_total'] ?? 0);
+    } else {
+        $totalServicosInicial += (float)($item['valor_total'] ?? 0);
+    }
+}
+$totalServicosInicial = round($totalServicosInicial, 2);
+$totalMateriaisInicial = round($totalMateriaisInicial, 2);
+$totalGeralInicial = round($totalServicosInicial + $totalMateriaisInicial, 2);
+
+$page_title = $editando ? 'Editar Proposta' : 'Nova Proposta';
+$breadcrumb = 'Comercial > Propostas > ' . ($editando ? 'Editar' : 'Nova');
+
+$itemsJson = json_encode($itensForm, JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+
+ob_start();
+?>
+<div class="card shadow-sm mb-3">
+  <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h5 class="fw-bold text-primary mb-0">
+      <?= e($page_title) ?>
+    </h5>
+    <div class="d-flex gap-2">
+      <a href="<?= e(app_url('propostas/listar.php')) ?>" class="btn btn-outline-secondary btn-sm">&laquo; Voltar</a>
+      <?php if ($editando): ?>
+      <a href="<?= e(app_url('propostas/ver.php?id=' . $propostaId)) ?>" class="btn btn-primary btn-sm">Ver proposta</a>
+      <?php endif; ?>
+    </div>
+  </div>
+</div>
+
+<?php if ($errors): ?>
+  <div class="alert alert-danger">
+    <div class="fw-bold mb-2">Não foi possível salvar a proposta:</div>
+    <ul class="mb-0">
+      <?php foreach ($errors as $err): ?>
+        <li><?= e($err) ?></li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
+<?php endif; ?>
+
+<form method="POST" id="proposta-form" novalidate>
+  <?= csrf_field() ?>
+  <input type="hidden" name="id" value="<?= (int)$formData['id'] ?>">
+
+  <div class="d-flex gap-2 mb-3">
+    <span class="badge bg-primary" data-step-indicator="1">1. Dados gerais</span>
+    <span class="badge bg-light text-dark" data-step-indicator="2">2. Itens da proposta</span>
+  </div>
+
+  <div data-step="1" class="step-pane">
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Cliente *</label>
+            <select name="id_cliente" class="form-select" required>
+              <option value="">Selecione...</option>
+              <?php foreach ($clientes as $cli): ?>
+                <option value="<?= (int)$cli['id'] ?>" <?= (int)$formData['id_cliente'] === (int)$cli['id'] ? 'selected' : '' ?>>
+                  <?= e($cli['nome_fantasia']) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Pacote (opcional)</label>
+            <select name="id_pacote" class="form-select">
+              <option value="">Nenhum</option>
+              <?php foreach ($pacotes as $pac): ?>
+                <option value="<?= (int)$pac['id'] ?>" <?= (int)($formData['id_pacote'] ?? 0) === (int)$pac['id'] ? 'selected' : '' ?>>
+                  <?= e($pac['nome']) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-12">
+            <label class="form-label">Descrição *</label>
+            <textarea name="descricao" class="form-control" rows="3" required><?= e($formData['descricao']) ?></textarea>
+          </div>
+          <div class="col-md-12">
+            <label class="form-label">Observações</label>
+            <textarea name="observacoes" class="form-control" rows="3"><?= e($formData['observacoes']) ?></textarea>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Status</label>
+            <select name="status" class="form-select">
+              <?php foreach ($allowedStatus as $status): ?>
+                <option value="<?= e($status) ?>" <?= $formData['status'] === $status ? 'selected' : '' ?>>
+                  <?= e(ucfirst($status)) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Data de envio<?= $formData['status'] === 'aceita' ? ' *' : '' ?></label>
+            <input type="datetime-local" name="data_envio" value="<?= e($formData['data_envio']) ?>" class="form-control">
+            <small class="text-muted">Obrigatório quando o status for "aceita".</small>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Validade (dias)</label>
+            <input type="number" name="validade_dias" value="<?= e($formData['validade_dias']) ?>" class="form-control" min="0" step="1">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="border rounded p-3 bg-light">
+          <div class="text-muted small">Total em serviços</div>
+          <div class="fs-5 fw-semibold" data-total="servicos">R$ <?= number_format($totalServicosInicial, 2, ',', '.') ?></div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="border rounded p-3 bg-light">
+          <div class="text-muted small">Total em materiais</div>
+          <div class="fs-5 fw-semibold" data-total="materiais">R$ <?= number_format($totalMateriaisInicial, 2, ',', '.') ?></div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="border rounded p-3 bg-light">
+          <div class="text-muted small">Valor total da proposta</div>
+          <div class="fs-5 fw-semibold text-primary" data-total="geral">R$ <?= number_format($totalGeralInicial, 2, ',', '.') ?></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div data-step="2" class="step-pane d-none">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h6 class="fw-bold mb-0">Itens da proposta</h6>
+            <small class="text-muted">Adicione serviços e materiais. O total é calculado automaticamente.</small>
+          </div>
+          <button type="button" class="btn btn-success btn-sm" id="add-item">+ Adicionar item</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-striped table-sm align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 12%">Tipo</th>
+                <th>Descrição</th>
+                <th style="width: 12%">Qtd.</th>
+                <th style="width: 16%">Valor unitário (R$)</th>
+                <th style="width: 16%">Total (R$)</th>
+                <th style="width: 8%" class="text-center">&nbsp;</th>
+              </tr>
+            </thead>
+            <tbody id="items-body"></tbody>
+          </table>
+        </div>
+
+        <div id="items-empty" class="alert alert-info mt-3<?= $itensForm ? ' d-none' : '' ?>">
+          Nenhum item adicionado ainda. Use o botão "Adicionar item" para começar.
+        </div>
+        <div id="items-error" class="alert alert-danger mt-3 d-none"></div>
+
+        <div class="row g-3 mt-3">
+          <div class="col-md-4">
+            <div class="border rounded p-3 bg-light">
+              <div class="text-muted small">Total em serviços</div>
+              <div class="fs-6 fw-semibold" data-total="servicos">R$ <?= number_format($totalServicosInicial, 2, ',', '.') ?></div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-3 bg-light">
+              <div class="text-muted small">Total em materiais</div>
+              <div class="fs-6 fw-semibold" data-total="materiais">R$ <?= number_format($totalMateriaisInicial, 2, ',', '.') ?></div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-3 bg-light">
+              <div class="text-muted small">Valor total da proposta</div>
+              <div class="fs-5 fw-semibold text-primary" data-total="geral">R$ <?= number_format($totalGeralInicial, 2, ',', '.') ?></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mt-4">
+    <button type="button" class="btn btn-outline-secondary" id="btn-prev">Anterior</button>
+    <div class="ms-auto d-flex gap-2">
+      <button type="button" class="btn btn-primary" id="btn-next">Próximo</button>
+      <button type="submit" class="btn btn-success d-none" id="btn-submit"><?= $editando ? 'Atualizar Proposta' : 'Salvar Proposta' ?></button>
+    </div>
+  </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const form = document.getElementById('proposta-form');
+  const steps = Array.from(document.querySelectorAll('[data-step]'));
+  const indicators = Array.from(document.querySelectorAll('[data-step-indicator]'));
+  const btnPrev = document.getElementById('btn-prev');
+  const btnNext = document.getElementById('btn-next');
+  const btnSubmit = document.getElementById('btn-submit');
+  const addItemBtn = document.getElementById('add-item');
+  const tbody = document.getElementById('items-body');
+  const emptyAlert = document.getElementById('items-empty');
+  const errorAlert = document.getElementById('items-error');
+  const totalsMap = {
+    servicos: Array.from(document.querySelectorAll('[data-total="servicos"]')),
+    materiais: Array.from(document.querySelectorAll('[data-total="materiais"]')),
+    geral: Array.from(document.querySelectorAll('[data-total="geral"]')),
+  };
+
+  let currentStep = 1;
+  let rowCount = 0;
+
+  const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  function showStep(step) {
+    currentStep = step;
+    steps.forEach(function (pane) {
+      pane.classList.toggle('d-none', Number(pane.dataset.step) !== step);
+    });
+    indicators.forEach(function (badge) {
+      const isActive = Number(badge.dataset.stepIndicator) === step;
+      badge.classList.toggle('bg-primary', isActive);
+      badge.classList.toggle('bg-light', !isActive);
+      badge.classList.toggle('text-dark', !isActive);
+    });
+    btnPrev.classList.toggle('d-none', step === 1);
+    btnNext.classList.toggle('d-none', step !== 1);
+    btnSubmit.classList.toggle('d-none', step !== 2);
+  }
+
+  function syncItemNames() {
+    Array.from(tbody.querySelectorAll('tr')).forEach(function (row, index) {
+      Array.from(row.querySelectorAll('[data-name]')).forEach(function (input) {
+        const field = input.getAttribute('data-name');
+        input.name = 'items[' + index + '][' + field + ']';
+      });
+    });
+  }
+
+  function ensureEmptyState() {
+    const hasRows = tbody.querySelectorAll('tr').length > 0;
+    emptyAlert.classList.toggle('d-none', hasRows);
+  }
+
+  function formatCurrency(value) {
+    return currencyFormatter.format(Number.isFinite(value) ? value : 0);
+  }
+
+  function syncTotals() {
+    let totalServicos = 0;
+    let totalMateriais = 0;
+
+    Array.from(tbody.querySelectorAll('tr')).forEach(function (row) {
+      const tipo = row.querySelector('.item-tipo').value;
+      const total = parseFloat(row.querySelector('[data-name="valor_total"]').value) || 0;
+      if (tipo === 'material') {
+        totalMateriais += total;
+      } else {
+        totalServicos += total;
+      }
+    });
+
+    const totalGeral = totalServicos + totalMateriais;
+
+    totalsMap.servicos.forEach(function (el) { el.textContent = formatCurrency(totalServicos); });
+    totalsMap.materiais.forEach(function (el) { el.textContent = formatCurrency(totalMateriais); });
+    totalsMap.geral.forEach(function (el) { el.textContent = formatCurrency(totalGeral); });
+  }
+
+  function updateRowTotal(row) {
+    const quantidade = parseFloat(row.querySelector('.item-quantidade').value) || 0;
+    const unitario = parseFloat(row.querySelector('.item-unitario').value) || 0;
+    const total = Math.max(0, quantidade * unitario);
+
+    row.querySelector('[data-name="valor_total"]').value = total.toFixed(2);
+    row.querySelector('.item-total').textContent = formatCurrency(total);
+
+    syncTotals();
+  }
+
+  function addItemRow(data) {
+    const defaults = {
+      tipo_item: 'servico',
+      descricao_item: '',
+      quantidade: 1,
+      valor_unitario: 0,
+      valor_total: 0,
+    };
+    const item = Object.assign({}, defaults, data || {});
+
+    const tr = document.createElement('tr');
+    tr.dataset.row = String(rowCount++);
+    tr.innerHTML = `
+      <td>
+        <select class="form-select form-select-sm item-tipo" data-name="tipo_item">
+          <option value="servico" ${item.tipo_item === 'servico' ? 'selected' : ''}>Serviço</option>
+          <option value="material" ${item.tipo_item === 'material' ? 'selected' : ''}>Material</option>
+        </select>
+      </td>
+      <td>
+        <input type="text" class="form-control form-control-sm item-descricao" data-name="descricao_item" value="">
+      </td>
+      <td>
+        <input type="number" min="0" step="0.01" class="form-control form-control-sm text-end item-quantidade" data-name="quantidade" value="1">
+      </td>
+      <td>
+        <input type="number" min="0" step="0.01" class="form-control form-control-sm text-end item-unitario" data-name="valor_unitario" value="0">
+      </td>
+      <td class="text-end">
+        <span class="item-total">${formatCurrency(item.valor_total)}</span>
+        <input type="hidden" data-name="valor_total" value="0.00">
+      </td>
+      <td class="text-center">
+        <button type="button" class="btn btn-outline-danger btn-sm item-remove" title="Remover item">&times;</button>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+
+    const selectTipo = tr.querySelector('.item-tipo');
+    const inputDescricao = tr.querySelector('.item-descricao');
+    const inputQuantidade = tr.querySelector('.item-quantidade');
+    const inputUnitario = tr.querySelector('.item-unitario');
+
+    selectTipo.value = item.tipo_item;
+    inputDescricao.value = item.descricao_item || '';
+    inputQuantidade.value = item.quantidade;
+    inputUnitario.value = item.valor_unitario;
+
+    inputQuantidade.addEventListener('input', function () { updateRowTotal(tr); });
+    inputUnitario.addEventListener('input', function () { updateRowTotal(tr); });
+    selectTipo.addEventListener('change', function () { syncTotals(); });
+    tr.querySelector('.item-remove').addEventListener('click', function () {
+      tr.remove();
+      syncItemNames();
+      ensureEmptyState();
+      syncTotals();
+    });
+
+    syncItemNames();
+    ensureEmptyState();
+    updateRowTotal(tr);
+  }
+
+  btnPrev.addEventListener('click', function () {
+    if (currentStep > 1) {
+      showStep(currentStep - 1);
+    }
+  });
+
+  btnNext.addEventListener('click', function () {
+    if (!form.reportValidity()) {
+      return;
+    }
+    showStep(2);
+  });
+
+  addItemBtn.addEventListener('click', function () {
+    addItemRow();
+  });
+
+  form.addEventListener('submit', function (event) {
+    syncItemNames();
+
+    const hasValidItem = Array.from(tbody.querySelectorAll('tr')).some(function (row) {
+      const descricao = (row.querySelector('.item-descricao').value || '').trim();
+      const quantidade = parseFloat(row.querySelector('.item-quantidade').value) || 0;
+      const unitario = parseFloat(row.querySelector('.item-unitario').value) || 0;
+      return descricao !== '' && quantidade > 0 && unitario >= 0;
+    });
+
+    if (!hasValidItem) {
+      event.preventDefault();
+      errorAlert.textContent = 'Adicione pelo menos um item válido (com descrição e quantidade).';
+      errorAlert.classList.remove('d-none');
+      showStep(2);
+      return;
+    }
+
+    errorAlert.classList.add('d-none');
+  });
+
+  // Carrega itens iniciais
+  const initialItems = <?= $itemsJson ?: '[]' ?>;
+
+  if (Array.isArray(initialItems) && initialItems.length > 0) {
+    initialItems.forEach(function (item) { addItemRow(item); });
+  } else {
+    ensureEmptyState();
+  }
+
+  showStep(currentStep);
+  syncTotals();
+});
+</script>
+<?php
+$content = ob_get_clean();
+include __DIR__ . '/../inc/template_base.php';

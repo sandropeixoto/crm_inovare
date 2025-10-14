@@ -127,31 +127,43 @@ CREATE TABLE IF NOT EXISTS propostas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     codigo_proposta VARCHAR(20) UNIQUE,
     id_cliente INT NOT NULL,
-    id_pacote INT NOT NULL,
+    id_pacote INT,
     id_usuario INT,
-    qtd_colaboradores INT NOT NULL,
-    valor_implantacao DECIMAL(10,2),
-    valor_mensal DECIMAL(10,2),
-    valor_por_vida DECIMAL(10,2),
-    total_geral DECIMAL(10,2),
-    sinistralidade DECIMAL(5,2),
-    franquia DECIMAL(5,2),
-    status ENUM('rascunho','enviada','aceita','rejeitada','expirada') DEFAULT 'rascunho',
-    validade DATE,
+    descricao TEXT,
     observacoes TEXT,
     data_envio DATETIME,
+    validade_dias INT,
+    status ENUM('rascunho','enviada','aceita','rejeitada','expirada') DEFAULT 'rascunho',
+    total_servicos DECIMAL(12,2) DEFAULT 0.00,
+    total_materiais DECIMAL(12,2) DEFAULT 0.00,
+    total_geral DECIMAL(12,2) DEFAULT 0.00,
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-    atualizado_em DATETIME ON UPDATE CURRENT_TIMESTAMP,
+    atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_propostas_cliente
       FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE CASCADE,
     CONSTRAINT fk_propostas_pacote
-      FOREIGN KEY (id_pacote) REFERENCES pacotes(id) ON DELETE CASCADE,
+      FOREIGN KEY (id_pacote) REFERENCES pacotes(id) ON DELETE SET NULL,
     CONSTRAINT fk_propostas_usuario
       FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_propostas_status ON propostas(status);
 CREATE INDEX idx_propostas_cliente ON propostas(id_cliente);
+
+CREATE TABLE IF NOT EXISTS proposta_itens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_proposta INT NOT NULL,
+    tipo_item ENUM('servico','material') DEFAULT 'servico',
+    descricao_item VARCHAR(255) NOT NULL,
+    quantidade DECIMAL(10,2) DEFAULT 1.00,
+    valor_unitario DECIMAL(12,2) DEFAULT 0.00,
+    valor_total DECIMAL(12,2) DEFAULT 0.00,
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_proposta_itens_proposta
+      FOREIGN KEY (id_proposta) REFERENCES propostas(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_proposta_itens_proposta ON proposta_itens(id_proposta);
 
 -- =========================================================
 -- 8) INTERAÇÕES (PIPELINE CRM)
