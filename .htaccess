@@ -1,16 +1,53 @@
-# Ativar exibição de erros PHP
+# ==============================================================
+# 🔧 CONFIGURAÇÕES DE DEBUG E LOG PHP
+# ==============================================================
+
+# Exibir erros PHP no navegador (somente para ambiente de desenvolvimento)
 php_flag display_errors On
 php_flag display_startup_errors On
 php_value error_reporting 32767
 
-# Registrar também em log
+# Registrar erros PHP em log (certifique-se de que a pasta existe e tem permissão)
 php_flag log_errors On
 php_value error_log /var/log/apache2/php_errors.log
 
-# Evitar cache (útil em debug)
-Header set Cache-Control "no-cache, no-store, must-revalidate"
-Header set Pragma "no-cache"
-Header set Expires 0
+# ==============================================================
+# 🚫 CONTROLE DE CACHE HTTP (útil durante desenvolvimento)
+# ==============================================================
 
-Header set Access-Control-Allow-Origin "*"
-Header always set X-Frame-Options "SAMEORIGIN"
+<IfModule mod_headers.c>
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+</IfModule>
+
+# ==============================================================
+# 🌐 CONFIGURAÇÕES DE SEGURANÇA E CORS
+# ==============================================================
+
+<IfModule mod_headers.c>
+    # Permitir acesso de qualquer origem (CORS)
+    Header set Access-Control-Allow-Origin "*"
+
+    # Evitar que o site seja exibido dentro de iframes externos
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # Outras boas práticas de segurança (opcionais)
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+# ==============================================================
+# 📁 REGRAS DE REWRITE (se usar URLs amigáveis)
+# ==============================================================
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /inovare/
+
+    # Exemplo: redirecionar tudo para public/
+    # (Descomente se estiver usando index dentro de /public)
+    # RewriteCond %{REQUEST_FILENAME} !-f
+    # RewriteCond %{REQUEST_FILENAME} !-d
+    # RewriteRule ^(.*)$ public/$1 [L,QSA]
+</IfModule>
