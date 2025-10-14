@@ -20,6 +20,7 @@ vendor/
 composer.lock
 .env
 .env.*
+!.env.example
 *.log
 storage/
 cache/

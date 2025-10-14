@@ -20,6 +20,7 @@ if ($editando && !$usuario) {
 
 // Salvar (criar/editar)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  validate_csrf_token($_POST['_token'] ?? null);
   $id = $_POST['id'] ?? null;
   $nome = trim($_POST['nome']);
   $email = trim($_POST['email']);
@@ -44,8 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       [$nome, $email, $perfil, $ativo, $hash]);
   }
 
-  header("Location: /inovare/public/usuarios/listar.php");
-  exit;
+  redirect(app_url('usuarios/listar.php'));
 }
 
 ob_start();
@@ -56,10 +56,11 @@ ob_start();
       <h5 class="fw-bold text-primary mb-0">
         <?= $editando ? 'Editar Usuário' : 'Novo Usuário' ?>
       </h5>
-      <a href="/inovare/public/usuarios/listar.php" class="btn btn-secondary btn-sm">← Voltar</a>
+      <a href="<?= e(app_url('usuarios/listar.php')) ?>" class="btn btn-secondary btn-sm">← Voltar</a>
     </div>
 
     <form method="POST">
+      <?= csrf_field() ?>
       <input type="hidden" name="id" value="<?= htmlspecialchars($usuario['id'] ?? '') ?>">
 
       <div class="row">
@@ -102,7 +103,7 @@ ob_start();
 
       <div class="mt-3">
         <button class="btn btn-primary"><?= $editando ? 'Salvar Alterações' : 'Criar Usuário' ?></button>
-        <a href="/inovare/public/usuarios/listar.php" class="btn btn-outline-secondary">Cancelar</a>
+        <a href="<?= e(app_url('usuarios/listar.php')) ?>" class="btn btn-outline-secondary">Cancelar</a>
       </div>
     </form>
   </div>

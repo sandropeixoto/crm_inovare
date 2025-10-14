@@ -23,7 +23,7 @@ O CRM Inovare é um painel web em PHP pensado para equipes comerciais e de gest�
 ## Configuração do ambiente
 1. **Clonar o repositório** e acessar a pasta do projeto.
 2. **Instalar as dependências**: `composer install` (gera `vendor/` com o Dompdf).【F:public/propostas/gerar_pdf.php†L123-L136】
-3. **Configurar credenciais do banco**: defina as variáveis de ambiente `CRM_DB_HOST`, `CRM_DB_NAME`, `CRM_DB_USER` e `CRM_DB_PASS` ou ajuste os valores padrão em `config/db.php`.【F:config/db.php†L17-L48】
+3. **Configurar credenciais do banco**: copie `.env.example` para `.env` e ajuste `CRM_DB_HOST`, `CRM_DB_NAME`, `CRM_DB_USER` e `CRM_DB_PASS`. As chaves são carregadas automaticamente pela aplicação, mas você pode sobrescrevê-las via variáveis de ambiente do servidor se preferir.【F:config/db.php†L17-L83】
 4. **Criar o schema**: importe `config/crm_inovare.sql` no MySQL (`mysql -u user -p < config/crm_inovare.sql`). O script cria tabelas, dados iniciais (pacotes, menus, configuração institucional) e atualiza a senha do usuário `admin@inovare.com` (defina uma senha conhecida após a importação).【F:config/crm_inovare.sql†L1-L237】
 5. **Ajustar URL base (opcional)**: se a aplicação não estiver na pasta `/inovare/public`, atualize `$base_path` em `public/inc/template_base.php` e qualquer redirecionamento absoluto para refletir o novo caminho público.【F:public/inc/template_base.php†L31-L125】
 6. **Subir o servidor**: `php -S localhost:8000 -t public` (ou configure o virtual host). O arquivo `index.php` na raiz já redireciona para `public/index.php`.【F:index.php†L1-L4】

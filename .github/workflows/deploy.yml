@@ -14,7 +14,7 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Upload de arquivos para AWS EC2
+      - name: Upload de arquivos via SSH
         uses: easingthemes/ssh-deploy@v4
         env:
           SSH_PRIVATE_KEY: ${{ secrets.AWS_SSH_KEY }}
@@ -22,52 +22,30 @@ jobs:
           REMOTE_USER: ${{ secrets.AWS_USER }}
           REMOTE_PORT: 22
           SOURCE: "./"
-          TARGET: "/var/www/html/crm_inovare"
-          EXCLUDE: |
-            **/.git*
-            **/.github*
-            **/.env
-            **/node_modules/**
-            **/vendor/**
-            **/storage/**
-            **/tmp/**
-            **/cache/**
-            **/logs/**
-            **/*.log
-            **/*.zip
-            **/*.tar
-            **/*.gz
+          TARGET: "/var/www/html/inovare"
+          EXCLUDE: "**/.git* **/.github* **/.env **/node_modules/** **/vendor/** **/storage/** **/tmp/** **/cache/** **/logs/** **/*.log **/*.zip **/*.tar **/*.gz"
           ARGS: "-rlgoDzvc --delete"
+          SSH_CMD_ARGS: "-o StrictHostKeyChecking=no"
 
-      - name: Corrigir permissões no servidor
+      - name: Corrigir permissões e reiniciar Apache
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.AWS_SERVER_IP }}
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            echo "🔧 Corrigindo permissões em /var/www/html/crm_inovare"
-            sudo mkdir -p /var/www/html/crm_inovare
-            sudo chown -R $USER:www-data /var/www/html/crm_inovare
-            sudo chmod -R 775 /var/www/html/crm_inovare
+            echo "🔧 Corrigindo permissões em /var/www/html/inovare..."
+            sudo mkdir -p /var/www/html/inovare
+            sudo chown -R $USER:www-data /var/www/html/inovare
+            sudo chmod -R 775 /var/www/html/inovare
 
-      - name: Reiniciar Apache/Nginx
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.AWS_SERVER_IP }}
-          username: ${{ secrets.AWS_USER }}
-          key: ${{ secrets.AWS_SSH_KEY }}
-          script: |
             echo "🔄 Reiniciando servidor web..."
             if command -v apache2 > /dev/null; then
-              sudo systemctl restart apache2
-              echo "✅ Apache reiniciado"
+              sudo systemctl restart apache2 && echo "✅ Apache reiniciado"
             elif command -v httpd > /dev/null; then
-              sudo systemctl restart httpd
-              echo "✅ HTTPD reiniciado"
+              sudo systemctl restart httpd && echo "✅ HTTPD reiniciado"
             elif command -v nginx > /dev/null; then
-              sudo systemctl restart nginx
-              echo "✅ Nginx reiniciado"
+              sudo systemctl restart nginx && echo "✅ Nginx reiniciado"
             else
               echo "⚠️ Nenhum servidor web detectado!"
             fi
