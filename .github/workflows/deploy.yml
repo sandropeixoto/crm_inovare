@@ -11,12 +11,10 @@ jobs:
     name: Publicar código no servidor AWS
 
     steps:
-      # 1️⃣ Faz checkout do código
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      # 2️⃣ Faz upload via SSH (rsync)
-      - name: Upload de arquivos via SSH
+      - name: Upload via SSH (rsync)
         uses: easingthemes/ssh-deploy@v4
         env:
           SSH_PRIVATE_KEY: ${{ secrets.AWS_SSH_KEY }}
@@ -25,11 +23,23 @@ jobs:
           REMOTE_PORT: 22
           SOURCE: "./"
           TARGET: "/var/www/html/inovare"
-          EXCLUDE: "**/.git* **/.github* **/.env **/node_modules/** **/vendor/** **/storage/** **/tmp/** **/cache/** **/logs/** **/*.log **/*.zip **/*.tar **/*.gz"
           ARGS: "-rlgoDzvc --delete"
           SSH_CMD_ARGS: "-o StrictHostKeyChecking=no"
+          EXCLUDE: >
+            **/.git* 
+            **/.github* 
+            **/.env 
+            **/node_modules/** 
+            **/vendor/** 
+            **/storage/** 
+            **/tmp/** 
+            **/cache/** 
+            **/logs/** 
+            **/*.log 
+            **/*.zip 
+            **/*.tar 
+            **/*.gz
 
-      # 3️⃣ Corrige permissões após upload
       - name: Corrigir permissões no servidor
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -37,13 +47,12 @@ jobs:
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            echo "🔧 Ajustando permissões em /var/www/html/inovare"
+            echo "🔧 Corrigindo permissões..."
             sudo chown -R ubuntu:www-data /var/www/html/inovare
             sudo find /var/www/html/inovare -type d -exec chmod 775 {} \;
             sudo find /var/www/html/inovare -type f -exec chmod 664 {} \;
             echo "✅ Permissões corrigidas!"
 
-      # 4️⃣ Reinicia o Apache
       - name: Reiniciar Apache
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -53,7 +62,7 @@ jobs:
           script: |
             echo "🔄 Reiniciando Apache..."
             sudo systemctl restart apache2 || sudo systemctl restart httpd
-            echo "✅ Apache reiniciado com sucesso!"
+            echo "✅ Apache reiniciado!"
 
       - name: Finalização
         run: echo "🎉 Deploy concluído com sucesso no servidor AWS!"
