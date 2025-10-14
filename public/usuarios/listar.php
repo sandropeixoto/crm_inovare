@@ -14,7 +14,7 @@ ob_start();
   <div class="card-body">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h5 class="fw-bold text-primary">Gestão de Usuários</h5>
-      <a href="/inovare/public/usuarios/editar.php" class="btn btn-success btn-sm">+ Novo Usuário</a>
+      <a href="<?= e(app_url('usuarios/editar.php')) ?>" class="btn btn-success btn-sm">+ Novo Usuário</a>
     </div>
 
     <div class="table-responsive">
@@ -42,8 +42,12 @@ ob_start();
               <td><?= $u['ativo'] ? '✅' : '❌' ?></td>
               <td><?= $u['ultimo_login'] ?: '-' ?></td>
               <td class="text-end">
-                <a href="/inovare/public/usuarios/editar.php?id=<?= $u['id'] ?>" class="btn btn-sm btn-primary">✏️ Editar</a>
-                <a href="/inovare/public/usuarios/excluir.php?id=<?= $u['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Excluir este usuário?')">🗑️ Excluir</a>
+                <a href="<?= e(app_url('usuarios/editar.php?id=' . (int)$u['id'])) ?>" class="btn btn-sm btn-primary">✏️ Editar</a>
+                <form method="POST" action="<?= e(app_url('usuarios/excluir.php')) ?>" class="d-inline" onsubmit="return confirm('Excluir este usuário?');">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                  <button class="btn btn-sm btn-danger">🗑️ Excluir</button>
+                </form>
               </td>
             </tr>
           <?php endforeach; endif; ?>

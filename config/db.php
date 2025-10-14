@@ -1,104 +1,133 @@
 <?php
+declare(strict_types=1);
+
 /**
- * db.php — Conexão PDO e funções de log/auditoria para o CRM Inovare
+ * Bootstrap de infraestrutura: conexão PDO, sessão, helpers e segurança.
  */
 
-// declare(strict_types=1);
+date_default_timezone_set(getenv('CRM_TZ') ?: 'America/Sao_Paulo');
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+define('APP_ENV', getenv('CRM_ENV') ?: 'development');
+define('APP_BASE_PATH', rtrim(getenv('CRM_BASE_PATH') ?: '/inovare/public', '/') . '/');
 
+if (APP_ENV !== 'development') {
+    ini_set('display_errors', '0');
+    ini_set('display_startup_errors', '0');
+} else {
+    ini_set('display_errors', '1');
+    ini_set('display_startup_errors', '1');
+    error_reporting(E_ALL);
+}
+
+$isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] === '443');
 
 if (session_status() === PHP_SESSION_NONE) {
+    session_set_cookie_params([
+        'httponly' => true,
+        'secure' => $isSecure,
+        'samesite' => 'Strict',
+        'path' => '/',
+    ]);
     session_start();
 }
 
-/**
- * Configuração — ajuste para o seu ambiente
- */
 define('DB_HOST', getenv('CRM_DB_HOST') ?: 'localhost');
 define('DB_NAME', getenv('CRM_DB_NAME') ?: 'crm_inovare');
 define('DB_USER', getenv('CRM_DB_USER') ?: 'root');
 define('DB_PASS', getenv('CRM_DB_PASS') ?: 'SENHA_FORTE_AQUI');
 define('DB_CHARSET', 'utf8mb4');
 
-/**
- * Retorna uma instância PDO singleton
- */
-function pdo(): PDO {
+function pdo(): PDO
+{
     static $pdo = null;
     if ($pdo instanceof PDO) {
         return $pdo;
     }
+
     $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
     $options = [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES   => false,
     ];
+
     try {
         $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
     } catch (Throwable $e) {
-        // Loga no sistema e exibe mensagem genérica
         log_system('critical', 'Falha na conexão PDO: ' . $e->getMessage(), __FILE__, __LINE__);
         http_response_code(500);
-        exit('Erro interno ao conectar no banco.');
+        exit('Erro interno ao conectar ao banco de dados.');
     }
+
     return $pdo;
 }
 
-/**
- * Dados de contexto (IP e User-Agent)
- */
-function client_ip(): string {
+function client_ip(): string
+{
+    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $parts = explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR']);
+        return trim($parts[0]);
+    }
+
     return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 }
-function client_ua(): string {
+
+function client_ua(): string
+{
     return $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
 }
 
-/**
- * Log de sistema (erros, avisos, info)
- */
-function log_system(string $nivel, string $mensagem, string $arquivo = '', int $linha = 0, string $stack = ''): void {
+function log_system(string $nivel, string $mensagem, string $arquivo = '', int $linha = 0, string $stack = ''): void
+{
     try {
         $sql = "INSERT INTO sistema_logs (nivel, mensagem, arquivo, linha, stack) VALUES (?,?,?,?,?)";
         pdo()->prepare($sql)->execute([$nivel, $mensagem, $arquivo, $linha, $stack]);
     } catch (Throwable $e) {
-        // Em último caso, evita loop de erro
         error_log('[CRM-Inovare] log_system fail: ' . $e->getMessage());
     }
 }
 
-/**
- * Log de ação do usuário (auditoria)
- * Ex.: log_user_action($idUser, 'Criou proposta', 'propostas', $idProposta, $antes, $depois);
- */
-function log_user_action(?int $id_usuario, string $acao, ?string $tabela = null, ?int $id_registro = null, $dados_anteriores = null, $dados_novos = null): void {
+function log_user_action(
+    ?int $id_usuario,
+    string $acao,
+    ?string $tabela = null,
+    ?int $id_registro = null,
+    $dados_anteriores = null,
+    $dados_novos = null
+): void {
     try {
-        $sql = "INSERT INTO logs_usuarios (id_usuario, acao, tabela_afetada, id_registro_afetado, dados_anteriores, dados_novos, ip, user_agent)
-                VALUES (?,?,?,?,?,?,?,?)";
+        $sql = "INSERT INTO logs_usuarios (id_usuario, acao, tabela_afetada, id_registro_afetado, dados_anteriores, dados_novos, ip, user_agent)"
+             . " VALUES (?,?,?,?,?,?,?,?)";
+
         $antes = $dados_anteriores ? json_encode($dados_anteriores, JSON_UNESCAPED_UNICODE) : null;
         $depois = $dados_novos ? json_encode($dados_novos, JSON_UNESCAPED_UNICODE) : null;
+
         pdo()->prepare($sql)->execute([
-            $id_usuario, $acao, $tabela, $id_registro, $antes, $depois, client_ip(), client_ua()
+            $id_usuario,
+            $acao,
+            $tabela,
+            $id_registro,
+            $antes,
+            $depois,
+            client_ip(),
+            client_ua(),
         ]);
     } catch (Throwable $e) {
         log_system('error', 'Falha ao registrar log de usuário: ' . $e->getMessage(), __FILE__, __LINE__);
     }
 }
 
-/**
- * Helper para executar queries com try/catch e log automático de erro
- */
-function run_query(string $sql, array $params = []): array {
+function run_query(string $sql, array $params = []): array
+{
     try {
         $stmt = pdo()->prepare($sql);
         $stmt->execute($params);
+
         if (preg_match('/^(SELECT|SHOW|DESCRIBE|EXPLAIN)\b/i', $sql)) {
             return $stmt->fetchAll();
         }
+
         return ['affected' => $stmt->rowCount()];
     } catch (Throwable $e) {
         log_system('error', 'Query falhou: ' . $e->getMessage() . ' | SQL: ' . $sql, __FILE__, __LINE__);
@@ -107,49 +136,160 @@ function run_query(string $sql, array $params = []): array {
     }
 }
 
-/**
- * Segurança extra de sessão (fixação de sessão básica)
- 
-function ensure_session_security(): void {
-    if (!isset($_SESSION['__ip'])) {
-        $_SESSION['__ip'] = client_ip();
-        $_SESSION['__ua'] = client_ua();
-        return;
+function app_url(string $path = ''): string
+{
+    return APP_BASE_PATH . ltrim($path, '/');
+}
+
+function redirect(string $path): void
+{
+    header('Location: ' . $path);
+    exit;
+}
+
+function abort(int $statusCode, string $message = 'Operação não permitida.'): void
+{
+    http_response_code($statusCode);
+    exit($message);
+}
+
+function logout_user(): void
+{
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
     }
-    if ($_SESSION['__ip'] !== client_ip() || $_SESSION['__ua'] !== client_ua()) {
+    session_destroy();
+}
+
+function ensure_session_security(bool $requireAuth = true): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    $fingerprint = hash('sha256', client_ip() . '|' . client_ua());
+
+    if (empty($_SESSION['__fingerprint'])) {
         session_regenerate_id(true);
-        $_SESSION = [];
-        session_destroy();
-        http_response_code(403);
-        exit('Sessão inválida.');
+        $_SESSION['__fingerprint'] = $fingerprint;
+        $_SESSION['__last_activity'] = time();
+    } else {
+        if (!hash_equals($_SESSION['__fingerprint'], $fingerprint)) {
+            logout_user();
+            abort(403, 'Sessão inválida.');
+        }
+
+        $timeout = 1800; // 30 minutos
+        if (!empty($_SESSION['__last_activity']) && (time() - (int)$_SESSION['__last_activity']) > $timeout) {
+            logout_user();
+            abort(440, 'Sessão expirada.');
+        }
+
+        $_SESSION['__last_activity'] = time();
     }
-} */
 
-// =====================================
-// Função de verificação de sessão
-// =====================================
-function ensure_session_security() {
-    if (session_status() !== PHP_SESSION_ACTIVE) session_start();
-
-    // Se não estiver logado, redireciona para login
-    if (empty($_SESSION['user'])) {
-        header("Location: /inovare/public/login.php");
-        exit;
+    if ($requireAuth && empty($_SESSION['user'])) {
+        redirect(app_url('login.php'));
     }
 }
 
+function current_user(): ?array
+{
+    return $_SESSION['user'] ?? null;
+}
 
-/**
- * Verificação simples de permissão por perfil
- */
-function require_role(array $roles): void {
-    if (empty($_SESSION['user'])) {
-        http_response_code(401);
-        exit('Não autenticado.');
+function require_auth(): array
+{
+    ensure_session_security(true);
+    $user = current_user();
+    if (!$user) {
+        redirect(app_url('login.php'));
     }
-    $perfil = $_SESSION['user']['perfil'] ?? 'visualizador';
+
+    return $user;
+}
+
+function require_role(array $roles): void
+{
+    $user = require_auth();
+    $perfil = $user['perfil'] ?? 'visualizador';
+
     if (!in_array($perfil, $roles, true)) {
-        http_response_code(403);
-        exit('Sem permissão.');
+        abort(403, 'Sem permissão.');
     }
+}
+
+function csrf_token(): string
+{
+    if (empty($_SESSION['_csrf_token'])) {
+        $_SESSION['_csrf_token'] = bin2hex(random_bytes(32));
+    }
+
+    return $_SESSION['_csrf_token'];
+}
+
+function csrf_field(): string
+{
+    return '<input type="hidden" name="_token" value="' . htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') . '">';
+}
+
+function validate_csrf_token(?string $token): void
+{
+    if (!$token || empty($_SESSION['_csrf_token']) || !hash_equals($_SESSION['_csrf_token'], $token)) {
+        abort(419, 'Token CSRF inválido. Recarregue a página.');
+    }
+}
+
+function app_config(): array
+{
+    static $config;
+    if ($config === null) {
+        $config = run_query("SELECT * FROM configuracoes WHERE ativo=1 ORDER BY id DESC LIMIT 1")[0] ?? [
+            'empresa_nome' => 'CRM Inovare',
+            'logotipo_url' => app_url('assets/logo.png'),
+            'rodape' => 'CRM Inovare',
+        ];
+    }
+
+    return $config;
+}
+
+function load_menu_tree(string $perfil): array
+{
+    static $cache = [];
+    if (isset($cache[$perfil])) {
+        return $cache[$perfil];
+    }
+
+    $menus = run_query("SELECT * FROM menus WHERE ativo=1 ORDER BY parent_id, ordem, titulo");
+    $index = [];
+
+    foreach ($menus as $menu) {
+        $permitidos = array_filter(array_map('trim', explode(',', (string)($menu['perfis_permitidos'] ?? ''))));
+        if ($permitidos && !in_array($perfil, $permitidos, true)) {
+            continue;
+        }
+
+        $menu['filhos'] = [];
+        $index[(int)$menu['id']] = $menu;
+    }
+
+    $tree = [];
+    foreach ($index as $id => &$menu) {
+        if (!empty($menu['parent_id']) && isset($index[(int)$menu['parent_id']])) {
+            $index[(int)$menu['parent_id']]['filhos'][] =& $menu;
+        } else {
+            $tree[$id] =& $menu;
+        }
+    }
+    unset($menu);
+
+    return $cache[$perfil] = $tree;
+}
+
+function e(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 }

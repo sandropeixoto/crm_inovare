@@ -2,10 +2,15 @@
 require_once __DIR__ . '/../config/db.php';
 ensure_session_security();
 
-$page_title = "Dashboard";
-$breadcrumb = "Início > Dashboard";
+$user = current_user();
+$page_title = 'Dashboard';
+$breadcrumb = 'Início > Dashboard';
 
-// Exemplo de cards no painel principal
+$totalClientes = (int)(run_query("SELECT COUNT(*) AS c FROM clientes")[0]['c'] ?? 0);
+$totalPropostas = (int)(run_query("SELECT COUNT(*) AS c FROM propostas")[0]['c'] ?? 0);
+$totalPacotes = (int)(run_query("SELECT COUNT(*) AS c FROM pacotes WHERE ativo=1")[0]['c'] ?? 0);
+$totalUsuarios = (int)(run_query("SELECT COUNT(*) AS c FROM usuarios WHERE ativo=1")[0]['c'] ?? 0);
+
 ob_start();
 ?>
 <div class="row">
@@ -13,7 +18,7 @@ ob_start();
     <div class="card text-bg-primary shadow-sm">
       <div class="card-body text-center">
         <h6>Total de Clientes</h6>
-        <h3><?= run_query("SELECT COUNT(*) AS c FROM clientes")[0]['c'] ?? 0 ?></h3>
+        <h3><?= $totalClientes ?></h3>
       </div>
     </div>
   </div>
@@ -21,7 +26,7 @@ ob_start();
     <div class="card text-bg-success shadow-sm">
       <div class="card-body text-center">
         <h6>Propostas Emitidas</h6>
-        <h3><?= run_query("SELECT COUNT(*) AS c FROM propostas")[0]['c'] ?? 0 ?></h3>
+        <h3><?= $totalPropostas ?></h3>
       </div>
     </div>
   </div>
@@ -29,7 +34,7 @@ ob_start();
     <div class="card text-bg-warning shadow-sm">
       <div class="card-body text-center">
         <h6>Pacotes Ativos</h6>
-        <h3><?= run_query("SELECT COUNT(*) AS c FROM pacotes WHERE ativo=1")[0]['c'] ?? 0 ?></h3>
+        <h3><?= $totalPacotes ?></h3>
       </div>
     </div>
   </div>
@@ -37,7 +42,7 @@ ob_start();
     <div class="card text-bg-info shadow-sm">
       <div class="card-body text-center">
         <h6>Usuários Ativos</h6>
-        <h3><?= run_query("SELECT COUNT(*) AS c FROM usuarios WHERE ativo=1")[0]['c'] ?? 0 ?></h3>
+        <h3><?= $totalUsuarios ?></h3>
       </div>
     </div>
   </div>
@@ -45,8 +50,8 @@ ob_start();
 
 <div class="card shadow-sm mt-4">
   <div class="card-body">
-    <h6 class="fw-bold text-primary mb-3">Bem-vindo, <?= htmlspecialchars($_SESSION['user']['nome']) ?>!</h6>
-    <p>Use o menu lateral para navegar entre os módulos do sistema.  
+    <h6 class="fw-bold text-primary mb-3">Bem-vindo, <?= e($user['nome'] ?? 'Usuário') ?>!</h6>
+    <p>Use o menu lateral para navegar entre os módulos do sistema.
        Os itens são gerenciados dinamicamente a partir da tabela <strong>menus</strong>.</p>
   </div>
 </div>

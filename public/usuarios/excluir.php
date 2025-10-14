@@ -3,9 +3,16 @@ require_once __DIR__ . '/../../config/db.php';
 ensure_session_security();
 require_role(['admin','gestor']);
 
-$id = (int)($_GET['id'] ?? 0);
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+  abort(405, 'Método não permitido.');
+}
+
+validate_csrf_token($_POST['_token'] ?? null);
+
+$id = (int)($_POST['id'] ?? 0);
 if ($id > 0) {
   run_query("DELETE FROM usuarios WHERE id=?", [$id]);
+  log_user_action(current_user()['id'] ?? null, 'Excluiu usuário', 'usuarios', $id, null, null);
 }
-header("Location: /inovare/public/usuarios/listar.php");
-exit;
+
+redirect(app_url('usuarios/listar.php'));
