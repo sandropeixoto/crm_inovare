@@ -113,6 +113,11 @@ ob_start();
   </div>
 </div>
 
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="fw-semibold mb-0">Propostas cadastradas</h5>
+  <a href="<?= e(app_url('propostas/nova.php')) ?>" class="btn btn-success btn-sm">+ Nova Proposta</a>
+</div>
+
 <div class="card shadow-sm">
   <div class="card-body p-0">
     <div class="table-responsive">

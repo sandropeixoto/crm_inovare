@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS clientes (
     email VARCHAR(150),
     telefone VARCHAR(30),
     endereco TEXT,
+    bairro VARCHAR(120),
+    cep VARCHAR(10),
     cidade VARCHAR(100),
     uf CHAR(2),
     qtd_colaboradores INT DEFAULT 0,
