@@ -242,18 +242,123 @@ function validate_csrf_token(?string $token): void
     }
 }
 
+function default_app_config(): array
+{
+    return [
+        'empresa_nome' => 'CRM Inovare',
+        'logotipo_url' => app_url('assets/logo.png'),
+        'rodape' => 'CRM Inovare',
+    ];
+}
+
 function app_config(): array
 {
     static $config;
-    if ($config === null) {
-        $config = run_query("SELECT * FROM configuracoes WHERE ativo=1 ORDER BY id DESC LIMIT 1")[0] ?? [
-            'empresa_nome' => 'CRM Inovare',
-            'logotipo_url' => app_url('assets/logo.png'),
-            'rodape' => 'CRM Inovare',
-        ];
+    if ($config !== null) {
+        return $config;
+    }
+
+    $config = default_app_config();
+
+    try {
+        $stmt = pdo()->query("SELECT * FROM configuracoes WHERE ativo=1 ORDER BY id DESC LIMIT 1");
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            $config = $row + $config;
+        }
+    } catch (Throwable $e) {
+        log_system('warning', 'Configurações indisponíveis: ' . $e->getMessage(), __FILE__, __LINE__);
     }
 
     return $config;
+}
+
+function fallback_menus(): array
+{
+    return [
+        [
+            'id' => 1,
+            'parent_id' => null,
+            'titulo' => 'Dashboard',
+            'icone' => '🏠',
+            'link' => 'index.php',
+            'perfis_permitidos' => 'admin,gestor,comercial,visualizador',
+        ],
+        [
+            'id' => 2,
+            'parent_id' => null,
+            'titulo' => 'Clientes',
+            'icone' => '👥',
+            'link' => '#',
+            'perfis_permitidos' => 'admin,gestor,comercial',
+        ],
+        [
+            'id' => 3,
+            'parent_id' => 2,
+            'titulo' => 'Listar Clientes',
+            'icone' => '📋',
+            'link' => 'clientes/listar.php',
+            'perfis_permitidos' => 'admin,gestor,comercial',
+        ],
+        [
+            'id' => 4,
+            'parent_id' => 2,
+            'titulo' => 'Novo Cliente',
+            'icone' => '➕',
+            'link' => 'clientes/nova.php',
+            'perfis_permitidos' => 'admin,gestor,comercial',
+        ],
+        [
+            'id' => 5,
+            'parent_id' => null,
+            'titulo' => 'Propostas',
+            'icone' => '📄',
+            'link' => 'propostas/listar.php',
+            'perfis_permitidos' => 'admin,gestor,comercial',
+        ],
+        [
+            'id' => 6,
+            'parent_id' => null,
+            'titulo' => 'Usuários',
+            'icone' => '🛠️',
+            'link' => 'usuarios/listar.php',
+            'perfis_permitidos' => 'admin,gestor',
+        ],
+    ];
+}
+
+function build_menu_tree(array $menus, string $perfil): array
+{
+    $index = [];
+    static $autoId = 1000;
+
+    foreach ($menus as $menu) {
+        $permitidos = array_filter(array_map('trim', explode(',', (string)($menu['perfis_permitidos'] ?? ''))));
+        if ($permitidos && !in_array($perfil, $permitidos, true)) {
+            continue;
+        }
+
+        $id = (int)($menu['id'] ?? 0);
+        if ($id === 0) {
+            $id = $autoId++;
+        }
+
+        $menu['filhos'] = [];
+        $index[$id] = $menu;
+    }
+
+    $tree = [];
+    foreach ($index as $id => &$menu) {
+        $parentId = (int)($menu['parent_id'] ?? 0);
+        if ($parentId && isset($index[$parentId])) {
+            $index[$parentId]['filhos'][] =& $menu;
+        } else {
+            $tree[$id] =& $menu;
+        }
+    }
+    unset($menu);
+
+    return array_values($tree);
 }
 
 function load_menu_tree(string $perfil): array
@@ -263,28 +368,19 @@ function load_menu_tree(string $perfil): array
         return $cache[$perfil];
     }
 
-    $menus = run_query("SELECT * FROM menus WHERE ativo=1 ORDER BY parent_id, ordem, titulo");
-    $index = [];
-
-    foreach ($menus as $menu) {
-        $permitidos = array_filter(array_map('trim', explode(',', (string)($menu['perfis_permitidos'] ?? ''))));
-        if ($permitidos && !in_array($perfil, $permitidos, true)) {
-            continue;
-        }
-
-        $menu['filhos'] = [];
-        $index[(int)$menu['id']] = $menu;
+    try {
+        $stmt = pdo()->query("SELECT * FROM menus WHERE ativo=1 ORDER BY parent_id, ordem, titulo");
+        $menus = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        log_system('warning', 'Falha ao carregar menus dinâmicos: ' . $e->getMessage(), __FILE__, __LINE__);
+        $menus = [];
     }
 
-    $tree = [];
-    foreach ($index as $id => &$menu) {
-        if (!empty($menu['parent_id']) && isset($index[(int)$menu['parent_id']])) {
-            $index[(int)$menu['parent_id']]['filhos'][] =& $menu;
-        } else {
-            $tree[$id] =& $menu;
-        }
+    $tree = build_menu_tree($menus, $perfil);
+
+    if (!$tree) {
+        $tree = build_menu_tree(fallback_menus(), $perfil);
     }
-    unset($menu);
 
     return $cache[$perfil] = $tree;
 }
