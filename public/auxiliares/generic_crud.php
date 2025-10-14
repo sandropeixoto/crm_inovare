@@ -46,33 +46,64 @@ $total_registros = run_query("SELECT COUNT(*) AS total FROM {$tabela} {$where_sq
 $total_paginas = max(1, ceil($total_registros / $por_pagina));
 
 // CRUD
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $acao = $_POST['acao'] ?? '';
-  $id = (int)($_POST['id'] ?? 0);
-  $dados = [];
-  foreach ($cols as $c) {
-    $campo = $c['Field'];
-    if (in_array($campo, ['id', 'criado_em', 'atualizado_em'])) continue;
-    $valor = $_POST[$campo] ?? null;
-    if (preg_match('/tinyint|bit/i', $c['Type'])) {
-      $valor = isset($_POST[$campo]) ? 1 : 0;
+  if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $acao = $_POST['acao'] ?? '';
+    $id = (int)($_POST['id'] ?? 0);
+    $isUpdate = ($acao === 'salvar' && $id > 0);
+    $dados = [];
+    foreach ($cols as $c) {
+      $campo = $c['Field'];
+      if (in_array($campo, ['id', 'criado_em', 'atualizado_em'])) continue;
+      $tipo = strtolower($c['Type']);
+      $nullable = strtoupper($c['Null'] ?? '') === 'YES';
+
+      // Valor vindo do POST
+      if (preg_match('/tinyint|bit/i', $tipo)) {
+        // Campos booleanos via checkbox
+        $valor = isset($_POST[$campo]) ? 1 : 0;
+      } else {
+        $valor = $_POST[$campo] ?? null;
+      }
+
+      $isNumeric = (bool)preg_match('/int|decimal|float|double/i', $tipo);
+      $isDateLike = (bool)preg_match('/date|datetime|timestamp/i', $tipo);
+
+      // Normaliza campos vazios para evitar erros com modos STRICT do MySQL
+      if ($valor === '') {
+        if ($isNumeric || $isDateLike) {
+          if ($nullable) {
+            // Persistir NULL quando permitido
+            $valor = null;
+          } else if ($isUpdate) {
+            // Em atualização, não sobrescrever com valor inválido
+            continue;
+          } else if ($isNumeric) {
+            // Em inserção: fallback não-nocivo para numéricos
+            $valor = 0;
+          }
+        }
+      }
+
+      $dados[$campo] = $valor;
     }
-    $dados[$campo] = $valor;
-  }
 
   if ($acao === 'salvar') {
-    if ($id > 0) {
-      $sets = implode(', ', array_map(fn($k) => "$k=?", array_keys($dados)));
-      run_query("UPDATE {$tabela} SET {$sets} WHERE id=?", array_merge(array_values($dados), [$id]));
-      log_user_action($_SESSION['user']['id'], "Atualizou registro em {$tabela}", $tabela, $id, null, $dados);
-    } else {
-      $colsStr = implode(',', array_keys($dados));
-      $valsStr = implode(',', array_fill(0, count($dados), '?'));
-      run_query("INSERT INTO {$tabela} ({$colsStr}) VALUES ({$valsStr})", array_values($dados));
-      $id = pdo()->lastInsertId();
-      log_user_action($_SESSION['user']['id'], "Criou registro em {$tabela}", $tabela, $id, null, $dados);
-    }
-  } elseif ($acao === 'excluir' && $id > 0) {
+      if ($id > 0) {
+        if (!empty($dados)) {
+          $sets = implode(', ', array_map(fn($k) => "$k=?", array_keys($dados)));
+          run_query("UPDATE {$tabela} SET {$sets} WHERE id=?", array_merge(array_values($dados), [$id]));
+          log_user_action($_SESSION['user']['id'], "Atualizou registro em {$tabela}", $tabela, $id, null, $dados);
+        }
+      } else {
+        if (!empty($dados)) {
+          $colsStr = implode(',', array_keys($dados));
+          $valsStr = implode(',', array_fill(0, count($dados), '?'));
+          run_query("INSERT INTO {$tabela} ({$colsStr}) VALUES ({$valsStr})", array_values($dados));
+          $id = pdo()->lastInsertId();
+          log_user_action($_SESSION['user']['id'], "Criou registro em {$tabela}", $tabela, $id, null, $dados);
+        }
+      }
+    } elseif ($acao === 'excluir' && $id > 0) {
     run_query("DELETE FROM {$tabela} WHERE id=?", [$id]);
     log_user_action($_SESSION['user']['id'], "Excluiu registro em {$tabela}", $tabela, $id);
   }
