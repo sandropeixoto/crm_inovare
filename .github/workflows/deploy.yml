@@ -8,61 +8,31 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    name: Publicar código no servidor AWS
 
     steps:
-      - name: Checkout do código
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Upload via SSH (rsync)
+      - name: Upload via SSH
         uses: easingthemes/ssh-deploy@v4
         env:
           SSH_PRIVATE_KEY: ${{ secrets.AWS_SSH_KEY }}
           REMOTE_HOST: ${{ secrets.AWS_SERVER_IP }}
           REMOTE_USER: ${{ secrets.AWS_USER }}
-          REMOTE_PORT: 22
-          SOURCE: "./"
-          TARGET: "/var/www/html/inovare"
+          TARGET: /var/www/html/inovare
+          SOURCE: ./
           ARGS: "-rlgoDzvc --delete"
           SSH_CMD_ARGS: "-o StrictHostKeyChecking=no"
-          EXCLUDE: >
-            **/.git* 
-            **/.github* 
-            **/.env 
-            **/node_modules/** 
-            **/vendor/** 
-            **/storage/** 
-            **/tmp/** 
-            **/cache/** 
-            **/logs/** 
-            **/*.log 
-            **/*.zip 
-            **/*.tar 
-            **/*.gz
+          EXCLUDE: "**/.git* **/.github* **/.env **/node_modules/** **/vendor/** **/storage/** **/tmp/** **/cache/** **/logs/** **/*.log **/*.zip **/*.tar **/*.gz"
 
-      - name: Corrigir permissões no servidor
+      - name: Corrigir permissões
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.AWS_SERVER_IP }}
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            echo "🔧 Corrigindo permissões..."
             sudo chown -R ubuntu:www-data /var/www/html/inovare
             sudo find /var/www/html/inovare -type d -exec chmod 775 {} \;
             sudo find /var/www/html/inovare -type f -exec chmod 664 {} \;
-            echo "✅ Permissões corrigidas!"
-
-      - name: Reiniciar Apache
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.AWS_SERVER_IP }}
-          username: ${{ secrets.AWS_USER }}
-          key: ${{ secrets.AWS_SSH_KEY }}
-          script: |
-            echo "🔄 Reiniciando Apache..."
             sudo systemctl restart apache2 || sudo systemctl restart httpd
-            echo "✅ Apache reiniciado!"
-
-      - name: Finalização
-        run: echo "🎉 Deploy concluído com sucesso no servidor AWS!"
