@@ -1,4 +1,4 @@
-name: 🚀 Deploy Automático para AWS EC2
+name: 🚀 Deploy Automático AWS
 
 on:
   push:
@@ -8,24 +8,22 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    name: Publicar código no servidor AWS
 
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Upload de arquivos via SSH
+      - name: Upload para servidor AWS
         uses: easingthemes/ssh-deploy@v4
         env:
           SSH_PRIVATE_KEY: ${{ secrets.AWS_SSH_KEY }}
           REMOTE_HOST: ${{ secrets.AWS_SERVER_IP }}
           REMOTE_USER: ${{ secrets.AWS_USER }}
-          REMOTE_PORT: 22
-          SOURCE: "./"
-          TARGET: "/var/www/html/inovare"
-          EXCLUDE: "**/.git* **/.github* **/.env **/node_modules/** **/vendor/** **/storage/** **/tmp/** **/cache/** **/logs/** **/*.log **/*.zip **/*.tar **/*.gz"
+          TARGET: /var/www/html/inovare
+          SOURCE: ./
           ARGS: "-rlgoDzvc --delete"
           SSH_CMD_ARGS: "-o StrictHostKeyChecking=no"
+          # ⚠️ Tiramos o EXCLUDE para evitar erros recorrentes
 
       - name: Corrigir permissões e reiniciar Apache
         uses: appleboy/ssh-action@v1.0.0
@@ -34,21 +32,10 @@ jobs:
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            echo "🔧 Corrigindo permissões em /var/www/html/inovare..."
-            sudo mkdir -p /var/www/html/inovare
-            sudo chown -R $USER:www-data /var/www/html/inovare
-            sudo chmod -R 775 /var/www/html/inovare
-
-            echo "🔄 Reiniciando servidor web..."
-            if command -v apache2 > /dev/null; then
-              sudo systemctl restart apache2 && echo "✅ Apache reiniciado"
-            elif command -v httpd > /dev/null; then
-              sudo systemctl restart httpd && echo "✅ HTTPD reiniciado"
-            elif command -v nginx > /dev/null; then
-              sudo systemctl restart nginx && echo "✅ Nginx reiniciado"
-            else
-              echo "⚠️ Nenhum servidor web detectado!"
-            fi
-
-      - name: Finalização
-        run: echo "🎉 Deploy concluído com sucesso para ${{ secrets.AWS_SERVER_IP }}"
+            echo "🔧 Corrigindo permissões..."
+            sudo chown -R ubuntu:www-data /var/www/html/inovare
+            sudo find /var/www/html/inovare -type d -exec chmod 775 {} \;
+            sudo find /var/www/html/inovare -type f -exec chmod 664 {} \;
+            echo "🔄 Reiniciando Apache..."
+            sudo systemctl restart apache2 || sudo systemctl restart httpd
+            echo "✅ Deploy concluído com sucesso!"
