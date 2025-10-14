@@ -137,9 +137,9 @@ ob_start();
           <tr><td colspan="<?= count($chaves)+1 ?>" class="text-center py-3">Nenhum registro encontrado.</td></tr>
         <?php else: foreach($dados as $d): ?>
           <tr>
-            <?php foreach($chaves as $c): ?>
-              <td><?= htmlspecialchars($d[$c]) ?></td>
-            <?php endforeach; ?>
+              <?php foreach($chaves as $c): ?>
+                <td><?= htmlspecialchars((string)($d[$c] ?? '')) ?></td>
+              <?php endforeach; ?>
             <td class="text-end">
               <button class="btn btn-sm btn-primary" onclick='editar(<?= json_encode($d) ?>)'>Editar</button>
               <form method="POST" class="d-inline" onsubmit="return confirm('Excluir este registro?')">
