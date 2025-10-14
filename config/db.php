@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Bootstrap de infraestrutura: conexão PDO, sessão, helpers e segurança.
+ * Bootstrap de infraestrutura: conexão PDO, sessão, helpers e segurança. v2
  */
 
 date_default_timezone_set(getenv('CRM_TZ') ?: 'America/Sao_Paulo');
