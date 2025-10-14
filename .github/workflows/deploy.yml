@@ -11,9 +11,11 @@ jobs:
     name: Publicar código no servidor AWS
 
     steps:
+      # 1️⃣ Faz checkout do código
       - name: Checkout do código
         uses: actions/checkout@v4
 
+      # 2️⃣ Faz upload via SSH (rsync)
       - name: Upload de arquivos via SSH
         uses: easingthemes/ssh-deploy@v4
         env:
@@ -27,28 +29,31 @@ jobs:
           ARGS: "-rlgoDzvc --delete"
           SSH_CMD_ARGS: "-o StrictHostKeyChecking=no"
 
-      - name: Corrigir permissões e reiniciar Apache
+      # 3️⃣ Corrige permissões após upload
+      - name: Corrigir permissões no servidor
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.AWS_SERVER_IP }}
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            echo "🔧 Corrigindo permissões em /var/www/html/inovare..."
-            sudo mkdir -p /var/www/html/inovare
-            sudo chown -R $USER:www-data /var/www/html/inovare
-            sudo chmod -R 775 /var/www/html/inovare
+            echo "🔧 Ajustando permissões em /var/www/html/inovare"
+            sudo chown -R ubuntu:www-data /var/www/html/inovare
+            sudo find /var/www/html/inovare -type d -exec chmod 775 {} \;
+            sudo find /var/www/html/inovare -type f -exec chmod 664 {} \;
+            echo "✅ Permissões corrigidas!"
 
-            echo "🔄 Reiniciando servidor web..."
-            if command -v apache2 > /dev/null; then
-              sudo systemctl restart apache2 && echo "✅ Apache reiniciado"
-            elif command -v httpd > /dev/null; then
-              sudo systemctl restart httpd && echo "✅ HTTPD reiniciado"
-            elif command -v nginx > /dev/null; then
-              sudo systemctl restart nginx && echo "✅ Nginx reiniciado"
-            else
-              echo "⚠️ Nenhum servidor web detectado!"
-            fi
+      # 4️⃣ Reinicia o Apache
+      - name: Reiniciar Apache
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.AWS_SERVER_IP }}
+          username: ${{ secrets.AWS_USER }}
+          key: ${{ secrets.AWS_SSH_KEY }}
+          script: |
+            echo "🔄 Reiniciando Apache..."
+            sudo systemctl restart apache2 || sudo systemctl restart httpd
+            echo "✅ Apache reiniciado com sucesso!"
 
       - name: Finalização
-        run: echo "🎉 Deploy concluído com sucesso para ${{ secrets.AWS_SERVER_IP }}"
+        run: echo "🎉 Deploy concluído com sucesso no servidor AWS!"
