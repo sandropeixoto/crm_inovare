@@ -58,6 +58,38 @@ $usuarios = run_query("SELECT id, nome FROM usuarios WHERE ativo = 1 ORDER BY no
 log_user_action(current_user()['id'] ?? null, 'Listou clientes', 'clientes', null, ['filtros' => $_GET], ['total' => $total]);
 
 function selected($a, $b) { return ($a === $b) ? 'selected' : ''; }
+
+function format_cnpj(?string $value): string
+{
+    $digits = preg_replace('/\D+/', '', (string)$value);
+    if (strlen($digits) !== 14) {
+        return $value ?? '';
+    }
+
+    return sprintf(
+        '%s.%s.%s/%s-%s',
+        substr($digits, 0, 2),
+        substr($digits, 2, 3),
+        substr($digits, 5, 3),
+        substr($digits, 8, 4),
+        substr($digits, 12, 2)
+    );
+}
+
+function format_phone_list(?string $value): string
+{
+    $digits = preg_replace('/\D+/', '', (string)$value);
+    if (strlen($digits) < 10) {
+        return $value ?? '';
+    }
+
+    $ddd = substr($digits, 0, 2);
+    $middle = strlen($digits) > 10 ? substr($digits, 2, 5) : substr($digits, 2, 4);
+    $end = strlen($digits) > 10 ? substr($digits, 7) : substr($digits, 6);
+
+    return sprintf('(%s) %s-%s', $ddd, $middle, $end);
+}
+
 $page_title = 'Clientes';
 $breadcrumb = 'Comercial > Clientes';
 
@@ -126,34 +158,42 @@ ob_start();
         <?php if (!$clientes): ?>
           <tr><td colspan="8" class="text-center py-4">Nenhum cliente encontrado.</td></tr>
         <?php else: ?>
-          <?php foreach ($clientes as $c): ?>
-            <tr>
-              <td><?= (int)$c['id'] ?></td>
-              <td>
-                <div class="fw-semibold"><?= e($c['nome_fantasia']) ?></div>
-                <div class="small text-muted">CNPJ: <?= e($c['cnpj']) ?></div>
-              </td>
-              <td><?= e($c['cidade']) ?>/<?= e($c['uf']) ?></td>
-              <td>
-                <?php
-                  $statusLabel = ucfirst((string)$c['status']);
-                  $statusClass = match ($c['status']) {
-                    'ativo' => 'success',
-                    'prospecto' => 'warning text-dark',
-                    default => 'secondary'
-                  };
-                ?>
-                <span class="badge bg-<?= $statusClass ?>"><?= e($statusLabel) ?></span>
-              </td>
-              <td><?= e($c['responsavel_nome'] ?? '-') ?></td>
-              <td><?= (int)($c['qtd_colaboradores'] ?? 0) ?></td>
-              <td><?= e($c['criado_em']) ?></td>
-              <td class="text-end">
-                <a class="btn btn-sm btn-outline-primary" href="<?= e(app_url('clientes/editar.php?id=' . (int)$c['id'])) ?>">Editar</a>
-                <a class="btn btn-sm btn-outline-secondary" href="<?= e(app_url('propostas/nova.php?cliente_id=' . (int)$c['id'])) ?>">Gerar Proposta</a>
-              </td>
-            </tr>
-          <?php endforeach; ?>
+            <?php foreach ($clientes as $c): ?>
+              <?php
+                $statusLabel = ucfirst((string)$c['status']);
+                $statusClass = match ($c['status']) {
+                  'ativo' => 'success',
+                  'prospecto' => 'warning text-dark',
+                  default => 'secondary'
+                };
+                $telefoneFormatado = format_phone_list($c['telefone'] ?? '');
+                $bairro = trim((string)($c['bairro'] ?? ''));
+              ?>
+              <tr>
+                <td><?= (int)$c['id'] ?></td>
+                <td>
+                  <div class="fw-semibold"><?= e($c['nome_fantasia']) ?></div>
+                  <div class="small text-muted">CNPJ: <?= e(format_cnpj($c['cnpj'] ?? '')) ?></div>
+                  <div class="small text-muted">E-mail: <?= e($c['email'] ?: '-') ?></div>
+                  <div class="small text-muted">
+                    Telefone: <?= e($telefoneFormatado ?: '-') ?>
+                    <?= $bairro !== '' ? ' • Bairro: ' . e($bairro) : '' ?>
+                  </div>
+                </td>
+                <td><?= e($c['cidade']) ?>/<?= e($c['uf']) ?></td>
+                <td>
+                  <span class="badge bg-<?= $statusClass ?>"><?= e($statusLabel) ?></span>
+                </td>
+                <td><?= e($c['responsavel_nome'] ?? '-') ?></td>
+                <td><?= (int)($c['qtd_colaboradores'] ?? 0) ?></td>
+                <td><?= e($c['criado_em']) ?></td>
+                <td class="text-end">
+                  <a class="btn btn-sm btn-outline-info" href="<?= e(app_url('clientes/ver.php?id=' . (int)$c['id'])) ?>">Ver</a>
+                  <a class="btn btn-sm btn-outline-primary" href="<?= e(app_url('clientes/editar.php?id=' . (int)$c['id'])) ?>">Editar</a>
+                  <a class="btn btn-sm btn-outline-secondary" href="<?= e(app_url('propostas/nova.php?cliente_id=' . (int)$c['id'])) ?>">Gerar Proposta</a>
+                </td>
+              </tr>
+            <?php endforeach; ?>
         <?php endif; ?>
         </tbody>
       </table>
