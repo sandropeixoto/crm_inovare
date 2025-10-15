@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Carregar todas as interações
-$interacoes = run_query("
+$interacoesRaw = run_query("
     SELECT i.*, u.nome AS usuario
     FROM interacoes i
     LEFT JOIN usuarios u ON u.id = i.id_usuario
@@ -53,9 +53,44 @@ $interacoes = run_query("
     ORDER BY i.id DESC
 ", [$id_cliente]);
 
-log_user_action($_SESSION['user']['id'], 'Visualizou interações', 'interacoes', null, ['cliente'=>$id_cliente], null);
+$interacoes = [];
+if (is_array($interacoesRaw)) {
+    foreach ($interacoesRaw as $linha) {
+        if (is_array($linha)) {
+            $interacoes[] = $linha;
+        }
+    }
+}
+
+log_user_action($_SESSION['user']['id'], 'Visualizou interacoes', 'interacoes', null, ['cliente'=>$id_cliente], null);
+
+function format_interacao_tipo(?string $tipo): string
+{
+    $map = [
+        'ligacao' => 'Liga��o',
+        'email' => 'E-mail',
+        'whatsapp' => 'WhatsApp',
+        'reuniao' => 'Reuni�o',
+        'visita' => 'Visita',
+        'outro' => 'Outro',
+    ];
+    $tipo = $tipo ?? '';
+    return $map[strtolower($tipo)] ?? ucfirst($tipo);
+}
 
 function h($s){return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');}
+
+$tipoAtual = $_POST['tipo'] ?? 'ligacao';
+$descricaoAtual = $_POST['descricao'] ?? '';
+$proximaAtual = $_POST['proxima_acao'] ?? '';
+$tiposDisponiveis = [
+    'ligacao' => format_interacao_tipo('ligacao'),
+    'email' => format_interacao_tipo('email'),
+    'whatsapp' => format_interacao_tipo('whatsapp'),
+    'reuniao' => format_interacao_tipo('reuniao'),
+    'visita' => format_interacao_tipo('visita'),
+    'outro' => format_interacao_tipo('outro'),
+];
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -114,21 +149,18 @@ function h($s){return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');}
         <div class="col-md-3">
           <label class="form-label">Tipo</label>
           <select name="tipo" class="form-select">
-            <option value="ligacao">Ligação</option>
-            <option value="email">E-mail</option>
-            <option value="whatsapp">WhatsApp</option>
-            <option value="reuniao">Reunião</option>
-            <option value="visita">Visita</option>
-            <option value="outro">Outro</option>
+            <?php foreach ($tiposDisponiveis as $valor => $rotulo): ?>
+              <option value="<?= e($valor) ?>" <?= $valor === $tipoAtual ? 'selected' : '' ?>><?= e($rotulo) ?></option>
+            <?php endforeach; ?>
           </select>
         </div>
         <div class="col-md-6">
           <label class="form-label">Descrição *</label>
-          <input type="text" name="descricao" class="form-control" required placeholder="Ex: Contato via WhatsApp para proposta">
+          <input type="text" name="descricao" class="form-control" required placeholder="Ex: Contato via WhatsApp para proposta" value="<?= h($descricaoAtual) ?>">
         </div>
         <div class="col-md-3">
           <label class="form-label">Próxima Ação</label>
-          <input type="date" name="proxima_acao" class="form-control">
+          <input type="date" name="proxima_acao" class="form-control" value="<?= h($proximaAtual) ?>">
         </div>
         <div class="col-12 text-end">
           <button class="btn btn-primary" type="submit">Registrar</button>
@@ -141,16 +173,25 @@ function h($s){return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');}
     <div class="card-header bg-white fw-bold">Histórico de Interações</div>
     <div class="card-body">
       <?php if(!$interacoes): ?>
-        <p class="text-muted">Nenhuma interação registrada.</p>
+        <p class="text-muted">Nenhuma intera��o registrada.</p>
       <?php else: ?>
         <div class="timeline">
           <?php foreach($interacoes as $i): ?>
+            <?php
+              $tipo = format_interacao_tipo($i['tipo'] ?? null);
+              $descricao = $i['descricao'] ?? '';
+              $autor = $i['usuario'] ?? '-';
+              if ($autor === '') { $autor = '-'; }
+              $criado = $i['criado_em'] ?? '-';
+              if ($criado === '') { $criado = '-'; }
+              $proxima = $i['proxima_acao'] ?? null;
+            ?>
             <div class="timeline-item">
-              <div class="fw-semibold text-primary"><?= ucfirst($i['tipo']) ?></div>
-              <div><?= h($i['descricao']) ?></div>
+              <div class="fw-semibold text-primary"><?= h($tipo) ?></div>
+              <div><?= h($descricao) ?></div>
               <div class="small text-muted">
-                Por <?= h($i['usuario'] ?? '-') ?> em <?= h($i['criado_em']) ?>
-                <?php if($i['proxima_acao']): ?> | Próx: <?= h($i['proxima_acao']) ?><?php endif; ?>
+                Por <?= h($autor) ?> em <?= h($criado) ?>
+                <?php if(!empty($proxima)): ?> | Pr�x: <?= h($proxima) ?><?php endif; ?>
               </div>
             </div>
           <?php endforeach; ?>
