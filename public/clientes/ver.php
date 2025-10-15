@@ -6,7 +6,7 @@ require_role(['admin', 'gestor', 'comercial', 'visualizador']);
 
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) {
-    abort(400, 'ID de cliente invÃ¡lido.');
+    abort(400, 'ID de cliente inválido.');
 }
 
 $cliente = run_query(
@@ -18,7 +18,7 @@ $cliente = run_query(
 )[0] ?? null;
 
 if (!$cliente) {
-    abort(404, 'Cliente nÃ£o encontrado.');
+    abort(404, 'Cliente não encontrado.');
 }
 
 $digitsCnpj = preg_replace('/\D+/', '', (string)($cliente['cnpj'] ?? ''));
@@ -115,13 +115,13 @@ try {
 log_user_action(current_user()['id'] ?? null, 'Visualizou cliente', 'clientes', $id, null, $cliente);
 
 $page_title = 'Cliente: ' . $cliente['nome_fantasia'];
-$breadcrumb = 'Clientes > VisualizaÃ§Ã£o';
+$breadcrumb = 'Clientes > Visualização';
 
 ob_start();
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
-    <h5 class="mb-1">InformaÃ§Ãµes do Cliente</h5>
+    <h5 class="mb-1">Informações do Cliente</h5>
     <span class="badge bg-secondary">ID <?= (int)$cliente['id'] ?></span>
   </div>
   <div class="d-flex gap-2">
@@ -134,7 +134,7 @@ ob_start();
   <div class="card-body">
     <div class="row g-3">
       <div class="col-md-4">
-        <strong>RazÃ£o Social:</strong><br><?= e($cliente['razao_social'] ?: '-') ?>
+        <strong>Razão Social:</strong><br><?= e($cliente['razao_social'] ?: '-') ?>
       </div>
       <div class="col-md-3">
         <strong>CNPJ:</strong><br><?= e($cnpjFormatado ?: '-') ?>
@@ -160,10 +160,10 @@ ob_start();
         <strong>Telefone:</strong><br><?= e($telefoneFormatado ?: '-') ?>
       </div>
       <div class="col-md-4">
-        <strong>ResponsÃ¡vel:</strong><br><?= e($cliente['responsavel_nome'] ?: '-') ?>
+        <strong>Responsável:</strong><br><?= e($cliente['responsavel_nome'] ?: '-') ?>
       </div>
       <div class="col-md-6">
-        <strong>EndereÃ§o:</strong><br><?= e($cliente['endereco'] ?: '-') ?>
+        <strong>Endereço:</strong><br><?= e($cliente['endereco'] ?: '-') ?>
       </div>
       <div class="col-md-3">
         <strong>Bairro:</strong><br><?= e($cliente['bairro'] ?: '-') ?>
@@ -211,7 +211,7 @@ ob_start();
                 <td><?= e($contato['cargo'] ?? '-') ?></td>
                 <td><?= e($contato['email'] ?? '-') ?></td>
                 <td><?= e(format_phone_view($contato['telefone'] ?? '')) ?></td>
-                <td><?= !empty($contato['principal']) ? '<span class="badge bg-primary">Sim</span>' : 'NÃ£o' ?></td>
+                <td><?= !empty($contato['principal']) ? '<span class="badge bg-primary">Sim</span>' : 'Não' ?></td>
               </tr>
             <?php endforeach; ?>
           <?php endif; ?>
@@ -334,5 +334,8 @@ ob_start();
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../inc/template_base.php';
+
+
+
 
 
