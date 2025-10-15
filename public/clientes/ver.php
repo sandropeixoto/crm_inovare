@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../config/db.php';
 
 ensure_session_security();
-require_role(['admin','gestor','comercial','visualizador']);
+require_role(['admin', 'gestor', 'comercial', 'visualizador']);
 
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) {
@@ -10,10 +10,10 @@ if ($id <= 0) {
 }
 
 $cliente = run_query(
-    "SELECT c.*, u.nome AS responsavel_nome
+    'SELECT c.*, u.nome AS responsavel_nome
      FROM clientes c
      LEFT JOIN usuarios u ON u.id = c.responsavel_comercial
-     WHERE c.id = ?",
+     WHERE c.id = ?',
     [$id]
 )[0] ?? null;
 
@@ -44,27 +44,47 @@ $cepFormatado = strlen($digitsCep) === 8
 
 $qtdColaboradores = (int)($cliente['qtd_colaboradores'] ?? 0);
 
-log_user_action(current_user()['id'] ?? null, 'Visualizou cliente', 'clientes', $id, null, $cliente);
+$contatos = run_query(
+    'SELECT nome, cargo, email, telefone, principal
+     FROM contatos_clientes
+     WHERE id_cliente = ?
+     ORDER BY principal DESC, nome ASC',
+    [$id]
+);
+
+function format_phone_view(?string $value): string
+{
+    $digits = preg_replace('/\D+/', '', (string)$value);
+    if (strlen($digits) < 10) {
+        return $value ?? '';
+    }
+    $ddd = substr($digits, 0, 2);
+    $middle = strlen($digits) > 10 ? substr($digits, 2, 5) : substr($digits, 2, 4);
+    $end = strlen($digits) > 10 ? substr($digits, 7) : substr($digits, 6);
+    return sprintf('(%s) %s-%s', $ddd, $middle, $end);
+}
 
 $propostas = run_query(
-    "SELECT p.id, p.codigo_proposta, p.descricao, p.status, p.data_envio, p.total_geral, pa.nome AS pacote
+    'SELECT p.id, p.codigo_proposta, p.descricao, p.status, p.data_envio, p.total_geral, pa.nome AS pacote
      FROM propostas p
      LEFT JOIN pacotes pa ON pa.id = p.id_pacote
      WHERE p.id_cliente = ?
      ORDER BY p.id DESC
-     LIMIT 5",
+     LIMIT 5',
     [$id]
 );
 
 $interacoes = run_query(
-    "SELECT i.*, u.nome AS usuario
+    'SELECT i.*, u.nome AS usuario
      FROM interacoes i
      LEFT JOIN usuarios u ON u.id = i.id_usuario
      WHERE i.id_cliente = ?
      ORDER BY i.id DESC
-     LIMIT 5",
+     LIMIT 5',
     [$id]
 );
+
+log_user_action(current_user()['id'] ?? null, 'Visualizou cliente', 'clientes', $id, null, $cliente);
 
 $page_title = 'Cliente: ' . $cliente['nome_fantasia'];
 $breadcrumb = 'Clientes > Visualização';
@@ -139,19 +159,53 @@ ob_start();
   </div>
 </div>
 
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white fw-semibold">Contatos</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Nome</th>
+            <th>Cargo</th>
+            <th>E-mail</th>
+            <th>Telefone</th>
+            <th>Principal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php if (!$contatos): ?>
+            <tr><td colspan="5" class="text-center py-3">Nenhum contato cadastrado.</td></tr>
+          <?php else: ?>
+            <?php foreach ($contatos as $contato): ?>
+              <tr>
+                <td><?= e($contato['nome'] ?? '-') ?></td>
+                <td><?= e($contato['cargo'] ?? '-') ?></td>
+                <td><?= e($contato['email'] ?? '-') ?></td>
+                <td><?= e(format_phone_view($contato['telefone'] ?? '')) ?></td>
+                <td><?= !empty($contato['principal']) ? '<span class="badge bg-primary">Sim</span>' : 'Não' ?></td>
+              </tr>
+            <?php endforeach; ?>
+          <?php endif; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <div class="row g-4">
   <div class="col-lg-6">
     <div class="card h-100 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Últimas Propostas</div>
+      <div class="card-header bg-white fw-semibold">&Uacute;ltimas Propostas</div>
       <div class="card-body p-0">
         <table class="table table-sm mb-0">
           <thead class="table-light">
             <tr>
-              <th>Código</th>
+              <th>C&oacute;digo</th>
               <th>Status</th>
               <th>Total (R$)</th>
               <th>Envio</th>
-              <th class="text-end">Ações</th>
+              <th class="text-end">A&ccedil;&otilde;es</th>
             </tr>
           </thead>
           <tbody>
@@ -164,7 +218,8 @@ ob_start();
                     'aceita' => 'success',
                     'enviada' => 'primary',
                     'rejeitada' => 'danger',
-                    default => 'secondary'
+                    'expirada' => 'secondary',
+                    default => 'warning text-dark'
                   };
                   $codigo = $p['codigo_proposta'] ?: '#' . $p['id'];
                   $dataEnvio = !empty($p['data_envio']) ? date('d/m/Y', strtotime((string)$p['data_envio'])) : '-';
@@ -195,20 +250,20 @@ ob_start();
   </div>
   <div class="col-lg-6">
     <div class="card h-100 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Últimas Interações</div>
+      <div class="card-header bg-white fw-semibold">&Uacute;ltimas Intera&ccedil;&otilde;es</div>
       <div class="card-body p-0">
         <table class="table table-sm mb-0">
           <thead class="table-light">
             <tr>
               <th>Tipo</th>
-              <th>Descrição</th>
-              <th>Usuário</th>
+              <th>Descri&ccedil;&atilde;o</th>
+              <th>Usu&aacute;rio</th>
               <th>Data</th>
             </tr>
           </thead>
           <tbody>
             <?php if (!$interacoes): ?>
-              <tr><td colspan="4" class="text-center py-3">Nenhuma interação registrada.</td></tr>
+              <tr><td colspan="4" class="text-center py-3">Nenhuma intera&ccedil;&atilde;o registrada.</td></tr>
             <?php else: ?>
               <?php foreach ($interacoes as $i): ?>
                 <tr>

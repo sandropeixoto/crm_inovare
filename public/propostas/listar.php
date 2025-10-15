@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/../../config/db.php';
 
 ensure_session_security();
@@ -90,7 +90,7 @@ ob_start();
         </select>
       </div>
       <div class="col-md-3">
-        <label class="form-label">Usuário</label>
+        <label class="form-label">Usu&aacute;rio</label>
         <select name="usuario" class="form-select">
           <option value="">Todos</option>
           <?php foreach($usuarios as $u): ?>
@@ -124,16 +124,16 @@ ob_start();
       <table class="table table-striped mb-0">
         <thead class="table-light">
           <tr>
-            <th>Código</th>
-            <th>Cliente / Descrição</th>
+            <th>C&oacute;digo</th>
+            <th>Cliente / Descri&ccedil;&atilde;o</th>
             <th>Status</th>
             <th>Envio</th>
             <th>Validade</th>
-            <th>Serviços (R$)</th>
+            <th>Servi&ccedil;os (R$)</th>
             <th>Materiais (R$)</th>
             <th>Total (R$)</th>
-            <th>Responsável</th>
-            <th class="text-end">Ações</th>
+            <th>Respons&aacute;vel</th>
+            <th class="text-end">A&ccedil;&otilde;es</th>
           </tr>
         </thead>
         <tbody>
@@ -148,7 +148,7 @@ ob_start();
                 'expirada' => 'secondary',
                 default => 'warning text-dark'
               };
-              $desc = trim((string)($p['descricao'] ?? ''));
+              $desc = trim((string)($p['Descri&ccedil;&atilde;o'] ?? ''));
               if ($desc !== '') {
                   if (function_exists('mb_strimwidth')) {
                       $desc = mb_strimwidth($desc, 0, 80, '...');
@@ -178,7 +178,7 @@ ob_start();
               <td><?= e($dataEnvio) ?></td>
               <td><?= e($validade) ?></td>
               <td><?= number_format((float)($p['total_servicos'] ?? 0), 2, ',', '.') ?></td>
-              <td><?= number_format((float)($p['total_materiais'] ?? 0), 2, ',', '.') ?></td>
+              <td><?= number_format((float)($p['total_Materiais'] ?? 0), 2, ',', '.') ?></td>
               <td class="fw-semibold"><?= number_format((float)($p['total_geral'] ?? 0), 2, ',', '.') ?></td>
               <td><?= e($p['usuario_nome'] ?? '-') ?></td>
               <td class="text-end">
@@ -218,3 +218,9 @@ ob_start();
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../inc/template_base.php';
+
+
+
+
+
+
