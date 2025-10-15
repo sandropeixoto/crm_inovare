@@ -1,62 +1,59 @@
-# CRM Inovare
+﻿# CRM Inovare
 
-## Visão geral
-O CRM Inovare é um painel web em PHP pensado para equipes comerciais e de gestão da saúde ocupacional acompanharem clientes, propostas e interações vinculadas aos pacotes NR-01 da Inovare Soluções em Saúde. O projeto oferece autenticação com papéis, dashboard com indicadores em tempo real e módulos de apoio (clientes, propostas, auxiliares, relatórios e usuários) organizados sobre um layout único com menu dinâmico carregado do banco de dados.【F:public/index.php†L1-L55】【F:public/inc/template_base.php†L1-L129】
+## Visao geral
+CRM Inovare e uma aplicacao web em PHP 8.1 voltada para equipes comerciais da Inovare Solucoes em Saude organizarem clientes, propostas e entregas contratuais. O sistema combina autenticacao com papeis, dashboard executivo e modulos administrativos construidos sobre Bootstrap 5, todos orquestrados pelo template public/inc/template_base.php.
 
-## Principais funcionalidades
-- **Autenticação e controle de acesso** — Login com verificação de senha hash, bloqueio por perfil (`admin`, `gestor`, `comercial`, `visualizador`) e guardas de rota por função.【F:public/login.php†L1-L88】【F:config/db.php†L131-L155】
-- **Dashboard executivo** — Cards com totais de clientes, propostas, pacotes e usuários ativos logo após o login.【F:public/index.php†L5-L55】
-- **Gestão de clientes** — Listagem com filtros por nome, cidade, status e responsável, paginação e integração com cadastro de propostas.【F:public/clientes/listar.php†L13-L200】
-- **Pipeline de interações** — Registro de contatos por tipo, timeline por cliente e acompanhamento da próxima ação planejada.【F:public/interacoes/cliente.php†L1-L163】
-- **Propostas comerciais** — Cálculo automático por pacote, salvamento e resumo da proposta recém-gerada para cada cliente.【F:public/propostas/nova.php†L1-L123】
-- **Geração de PDFs** — Exportação de propostas com layout corporativo via Dompdf, trazendo dados do cliente, pacote e configuração institucional.【F:public/propostas/gerar_pdf.php†L1-L137】
-- **Relatórios financeiros** — Gráficos (Chart.js) com totais por status, evolução mensal e consolidados de propostas emitidas.【F:public/relatorios/dashboard_financeiro.php†L1-L254】
-- **Administração auxiliar** — CRUD genérico para tabelas de apoio (menus, pacotes, status etc.) com filtros, modais e paginação.【F:public/auxiliares/generic_crud.php†L1-L200】
-- **Gestão de usuários** — Tela administrativa para criar, editar, ativar/desativar e remover contas da aplicação.【F:public/usuarios/listar.php†L1-L57】
+## Destaques atuais
+- **Autenticacao e controle de acesso** - Login com senha usando bcrypt, armazenamento seguro de sessao (ensure_session_security) e autorizacao por perfil (admin, gestor, comercial, visualizador).
+- **Dashboard** - Cards e resumos para clientes, propostas, pacotes e usuarios ativos imediatamente apos o login.
+- **Clientes e pipeline comercial** - Cadastro completo, filtros, timeline de interacoes e campo de proxima acao. Os tipos de interacao agora sao mantidos na tabela auxiliar interacoes_tipos, administrada via Generic CRUD.
+- **Propostas comerciais** - Montagem por pacote, calculos automaticos, exportacao PDF (Dompdf) e logs de auditoria a cada alteracao.
+- **Relatorios financeiros** - Painel em Chart.js com totais por status e evolucao mensal.
+- **Administracao auxiliar** - Alem do generic_crud.php, o sistema possui modulos dedicados para:
+  - auxiliares/pacotes/ (listar, filtrar, criar, editar e excluir pacotes)
+  - auxiliares/pacotes_servicos/ (manter os servicos vinculados a cada pacote)
+  - auxiliares/status_proposta.php, classificacoes.php e unidades_medida.php.
+- **Gestao de usuarios** - Criacao, edicao, ativacao e remocao de contas com rastreio completo via log_user_action.
+- **Auditoria e monitoramento** - Logs de sistema (sistema_logs) e de usuario (logs_usuarios) registram IP, user agent e payload de alteracoes.
 
 ## Requisitos
-- PHP 8.1+ com extensões `pdo_mysql` e `openssl` habilitadas.
-- MySQL 8 ou compatível para hospedar o banco `crm_inovare`.
-- Composer para instalar dependências PHP (Dompdf).【F:composer.json†L1-L5】
-- Servidor HTTP apontando para o diretório `public/` (Apache, Nginx ou `php -S`).
+- PHP 8.1 ou superior com extensoes pdo_mysql, openssl e mbstring habilitadas.
+- MySQL 8+ (ou MariaDB equivalente) utilizando o schema crm_inovare.
+- Composer para instalar dependencias (Dompdf).
+- Servidor HTTP apontando para o diretorio public/ (Apache, Nginx ou php -S).
 
-## Configuração do ambiente
-1. **Clonar o repositório** e acessar a pasta do projeto.
-2. **Instalar as dependências**: `composer install` (gera `vendor/` com o Dompdf).【F:public/propostas/gerar_pdf.php†L123-L136】
-3. **Configurar credenciais do banco**: copie `.env.example` para `.env` e ajuste `CRM_DB_HOST`, `CRM_DB_NAME`, `CRM_DB_USER` e `CRM_DB_PASS`. As chaves são carregadas automaticamente pela aplicação, mas você pode sobrescrevê-las via variáveis de ambiente do servidor se preferir.【F:config/db.php†L17-L83】
-4. **Criar o schema**: importe `config/crm_inovare.sql` no MySQL (`mysql -u user -p < config/crm_inovare.sql`). O script cria tabelas, dados iniciais (pacotes, menus, configuração institucional) e atualiza a senha do usuário `admin@inovare.com` (defina uma senha conhecida após a importação).【F:config/crm_inovare.sql†L1-L237】
-5. **Ajustar URL base (opcional)**: se a aplicação não estiver na pasta `/inovare/public`, atualize `$base_path` em `public/inc/template_base.php` e qualquer redirecionamento absoluto para refletir o novo caminho público.【F:public/inc/template_base.php†L31-L125】
-6. **Subir o servidor**: `php -S localhost:8000 -t public` (ou configure o virtual host). O arquivo `index.php` na raiz já redireciona para `public/index.php`.【F:index.php†L1-L4】
-7. **Acessar o sistema**: abra `http://localhost:8000/login.php` e autentique com um usuário existente; redefina a senha do administrador diretamente no banco se necessário.
+## Como configurar
+1. **Clonar o repositorio** e entrar na pasta do projeto.
+2. **Instalar dependencias**: composer install (gera vendor/ com Dompdf).
+3. **Configurar variaveis**: copie .env.example para .env e ajuste as chaves CRM_DB_*. O bootstrap em config/db.php carrega esse arquivo automaticamente.
+4. **Criar o banco**: importe config/crm_inovare.sql. O script cria tabelas, menus, configuracao institucional, pacotes base e atualiza a senha de admin@inovare.com.
+5. **Ajustar caminho base (opcional)**: se o sistema estiver fora de /inovare/public, ajuste APP_BASE_PATH em config/db.php ou adapte template_base.php.
+6. **Subir o servidor**: php -S localhost:8000 -t public ou configure seu virtual host preferido.
+7. **Acessar**: abra http://localhost:8000/login.php e autentique-se. Troque a senha do administrador logo apos a importacao do schema.
 
-## Estrutura principal
+## Estrutura de pastas
 ```
-config/            # Conexão PDO, helpers e script SQL completo do banco
-public/            # Código acessível via HTTP (login, dashboard, módulos)
-  auxiliares/      # CRUD genérico para tabelas auxiliares
-  clientes/        # Cadastro, edição e visualização de clientes
-  inc/             # Template base (layout, menus) e includes comuns
-  interacoes/      # Timeline de interações por cliente
-  propostas/       # Criação, listagem e geração de PDFs de propostas
-  relatorios/      # Dashboard financeiro com gráficos
-  usuarios/        # Administração de contas de usuário
-vendor/            # Dependências instaladas via Composer (gerado)
+config/                Bootstrap de banco, helpers, funcoes de seguranca
+public/
+  auxiliares/         Modulos auxiliares (pacotes, pacotes_servicos, generic CRUD, etc.)
+  clientes/           Listagem, cadastro e visualizacao de clientes
+  inc/                Template base, menu lateral e includes globais
+  interacoes/         Registro de contatos e timeline por cliente
+  propostas/          Criacao, revisao e exportacao de propostas
+  relatorios/         Dashboard financeiro em Chart.js
+  usuarios/           Administracao de contas do sistema
+vendor/               Dependencias instaladas via Composer (nao versionadas)
 ```
 
-## Banco de dados e auditoria
-O schema contempla usuários, clientes, pacotes, propostas, interações, logs de auditoria e menus dinâmicos. A criação inicial popula pacotes NR-01, configurações institucionais e o menu lateral padrão.【F:config/crm_inovare.sql†L90-L237】 As funções auxiliares centralizam conexão PDO, logs sistêmicos e rastreamento de ações do usuário (IP e user agent), o que facilita auditoria de operações críticas.【F:config/db.php†L20-L155】
+## Banco de dados e logs
+O schema cobre clientes, contatos, pacotes, servicos, propostas, interacoes (com tabela auxiliar para tipos), configuracoes institucionais e os dois canais de auditoria. As funcoes run_query, log_user_action e log_system centralizam a persistencia, garantem padrao unico de log e exibem mensagens amigaveis em caso de falha.
 
-## Segurança e controle de acesso
-Todas as rotas protegidas chamam `ensure_session_security()` para exigir sessão ativa e `require_role()` para validar perfis autorizados antes de executar ações específicas (clientes, propostas, relatórios, etc.). Use HTTPS em produção e substitua a senha padrão do administrador logo após o provisionamento.【F:config/db.php†L131-L155】【F:public/clientes/listar.php†L10-L12】
+## Controles de seguranca
+Todas as rotas protegidas chamam ensure_session_security() e require_role(). Formularios utilizam csrf_field() e validate_csrf_token(). Em producao recomenda-se HTTPS, rotacao de senhas administrativas e ajuste do timeout de sessao conforme politica interna.
 
-## Personalização e extensões
-- **Menus laterais**: gerenciados pela tabela `menus` e renderizados dinamicamente; utilize o CRUD genérico para adicionar itens e submenus por perfil.【F:public/inc/template_base.php†L15-L125】【F:public/auxiliares/generic_crud.php†L1-L200】
-- **Configuração institucional**: altere o logotipo, contatos e rodapé pelo registro ativo em `configuracoes`, refletindo imediatamente no login, layout e PDFs.【F:public/login.php†L11-L85】【F:public/propostas/gerar_pdf.php†L50-L117】
-- **Relatórios**: o dashboard financeiro pode ser expandido com novos datasets ou exportações reutilizando a base Chart.js existente.【F:public/relatorios/dashboard_financeiro.php†L10-L254】
+## Dicas de evolucao
+- Implementar fluxo de redefinicao de senha por e-mail, alem de expiracao automatica de sessao.
+- Centralizar configuracoes de URL base para facilitar deploys em subdiretorios.
+- Adicionar testes automatizados (PHPUnit ou Pest) para helpers de banco e regras de negocio.
 
-## Próximos passos sugeridos
-- Implementar recuperação de senha por e-mail e expiração automática de sessão.
-- Converter os caminhos absolutos fixos (`/inovare/public`) para uma configuração centralizada para facilitar deploys em subdiretórios.【F:public/inc/template_base.php†L31-L125】
-- Adicionar testes automatizados (PHPUnit ou Pest) para os helpers em `config/db.php`.
-
-A documentação acima resume os módulos existentes e como iniciar rapidamente o CRM Inovare em um novo ambiente.
+Este README reflete o estado atual do CRM Inovare e os modulos adicionados recentemente para gestao de pacotes, servicos e tipos de interacao.
