@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/../../config/db.php';
 
 ensure_session_security();
@@ -6,7 +6,7 @@ require_role(['admin', 'gestor', 'comercial', 'visualizador']);
 
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) {
-    abort(400, 'ID de cliente inválido.');
+    abort(400, 'ID de cliente invÃ¡lido.');
 }
 
 $cliente = run_query(
@@ -18,7 +18,7 @@ $cliente = run_query(
 )[0] ?? null;
 
 if (!$cliente) {
-    abort(404, 'Cliente não encontrado.');
+    abort(404, 'Cliente nÃ£o encontrado.');
 }
 
 $digitsCnpj = preg_replace('/\D+/', '', (string)($cliente['cnpj'] ?? ''));
@@ -74,26 +74,54 @@ $propostas = run_query(
     [$id]
 );
 
-$interacoes = run_query(
-    'SELECT i.*, u.nome AS usuario
-     FROM interacoes i
-     LEFT JOIN usuarios u ON u.id = i.id_usuario
-     WHERE i.id_cliente = ?
-     ORDER BY i.id DESC
-     LIMIT 5',
-    [$id]
-);
+$interacoes = [];
+try {
+    $stmtInteracoes = pdo()->prepare("
+        SELECT i.*, u.nome AS usuario, COALESCE(t.tipo_interacao, i.tipo) AS tipo_exibicao
+        FROM interacoes i
+        LEFT JOIN usuarios u ON u.id = i.id_usuario
+        LEFT JOIN interacoes_tipos t ON t.id = i.id_tipo_interacao
+        WHERE i.id_cliente = ?
+        ORDER BY i.id DESC
+        LIMIT 5
+    ");
+    $stmtInteracoes->execute([$id]);
+    $resultadoInteracoes = $stmtInteracoes->fetchAll(PDO::FETCH_ASSOC);
+    if (is_array($resultadoInteracoes)) {
+        $interacoes = $resultadoInteracoes;
+    }
+} catch (Throwable $e) {
+    log_system('warning', 'Resumo de interacoes com tipos auxiliares indisponivel: ' . $e->getMessage(), __FILE__, __LINE__);
+    try {
+        $stmtInteracoesFallback = pdo()->prepare("
+            SELECT i.*, u.nome AS usuario, i.tipo AS tipo_exibicao
+            FROM interacoes i
+            LEFT JOIN usuarios u ON u.id = i.id_usuario
+            WHERE i.id_cliente = ?
+            ORDER BY i.id DESC
+            LIMIT 5
+        ");
+        $stmtInteracoesFallback->execute([$id]);
+        $resultadoInteracoes = $stmtInteracoesFallback->fetchAll(PDO::FETCH_ASSOC);
+        if (is_array($resultadoInteracoes)) {
+            $interacoes = $resultadoInteracoes;
+        }
+    } catch (Throwable $erroFallback) {
+        log_system('error', 'Falha ao carregar resumo de interacoes: ' . $erroFallback->getMessage(), __FILE__, __LINE__);
+        $interacoes = [];
+    }
+}
 
 log_user_action(current_user()['id'] ?? null, 'Visualizou cliente', 'clientes', $id, null, $cliente);
 
 $page_title = 'Cliente: ' . $cliente['nome_fantasia'];
-$breadcrumb = 'Clientes > Visualização';
+$breadcrumb = 'Clientes > VisualizaÃ§Ã£o';
 
 ob_start();
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
-    <h5 class="mb-1">Informações do Cliente</h5>
+    <h5 class="mb-1">InformaÃ§Ãµes do Cliente</h5>
     <span class="badge bg-secondary">ID <?= (int)$cliente['id'] ?></span>
   </div>
   <div class="d-flex gap-2">
@@ -106,7 +134,7 @@ ob_start();
   <div class="card-body">
     <div class="row g-3">
       <div class="col-md-4">
-        <strong>Razão Social:</strong><br><?= e($cliente['razao_social'] ?: '-') ?>
+        <strong>RazÃ£o Social:</strong><br><?= e($cliente['razao_social'] ?: '-') ?>
       </div>
       <div class="col-md-3">
         <strong>CNPJ:</strong><br><?= e($cnpjFormatado ?: '-') ?>
@@ -132,10 +160,10 @@ ob_start();
         <strong>Telefone:</strong><br><?= e($telefoneFormatado ?: '-') ?>
       </div>
       <div class="col-md-4">
-        <strong>Responsável:</strong><br><?= e($cliente['responsavel_nome'] ?: '-') ?>
+        <strong>ResponsÃ¡vel:</strong><br><?= e($cliente['responsavel_nome'] ?: '-') ?>
       </div>
       <div class="col-md-6">
-        <strong>Endereço:</strong><br><?= e($cliente['endereco'] ?: '-') ?>
+        <strong>EndereÃ§o:</strong><br><?= e($cliente['endereco'] ?: '-') ?>
       </div>
       <div class="col-md-3">
         <strong>Bairro:</strong><br><?= e($cliente['bairro'] ?: '-') ?>
@@ -183,7 +211,7 @@ ob_start();
                 <td><?= e($contato['cargo'] ?? '-') ?></td>
                 <td><?= e($contato['email'] ?? '-') ?></td>
                 <td><?= e(format_phone_view($contato['telefone'] ?? '')) ?></td>
-                <td><?= !empty($contato['principal']) ? '<span class="badge bg-primary">Sim</span>' : 'Não' ?></td>
+                <td><?= !empty($contato['principal']) ? '<span class="badge bg-primary">Sim</span>' : 'NÃ£o' ?></td>
               </tr>
             <?php endforeach; ?>
           <?php endif; ?>
@@ -266,11 +294,31 @@ ob_start();
               <tr><td colspan="4" class="text-center py-3">Nenhuma intera&ccedil;&atilde;o registrada.</td></tr>
             <?php else: ?>
               <?php foreach ($interacoes as $i): ?>
+                <?php
+                  $tipoLinha = trim((string)($i['tipo_exibicao'] ?? ''));
+                  if ($tipoLinha === '') {
+                      $tipoLinha = '-';
+                  }
+                  $descricaoLinha = $i['descricao'] ?? '-';
+                  if ($descricaoLinha === '') {
+                      $descricaoLinha = '-';
+                  }
+                  $autorLinha = trim((string)($i['usuario'] ?? ''));
+                  if ($autorLinha === '') {
+                      $autorLinha = '-';
+                  }
+                  $dataLinhaBruta = $i['criado_em'] ?? null;
+                  $dataLinha = '-';
+                  if ($dataLinhaBruta) {
+                      $timestampResumo = strtotime((string)$dataLinhaBruta);
+                      $dataLinha = $timestampResumo ? date('d/m/Y H:i', $timestampResumo) : (string)$dataLinhaBruta;
+                  }
+                ?>
                 <tr>
-                  <td><?= e(ucfirst((string)$i['tipo'])) ?></td>
-                  <td><?= e($i['descricao'] ?? '-') ?></td>
-                  <td><?= e($i['usuario'] ?? '-') ?></td>
-                  <td><?= e($i['criado_em'] ?? '-') ?></td>
+                  <td><?= e($tipoLinha) ?></td>
+                  <td><?= e($descricaoLinha) ?></td>
+                  <td><?= e($autorLinha) ?></td>
+                  <td><?= e($dataLinha) ?></td>
                 </tr>
               <?php endforeach; ?>
             <?php endif; ?>
@@ -286,3 +334,5 @@ ob_start();
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../inc/template_base.php';
+
+

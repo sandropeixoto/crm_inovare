@@ -1,4 +1,4 @@
--- crm_inovare.sql
+﻿-- crm_inovare.sql
 -- Estrutura inicial do CRM Inovare (MySQL 8+)
 -- Charset: utf8mb4 / Collation: utf8mb4_unicode_ci
 
@@ -7,7 +7,7 @@ CREATE DATABASE IF NOT EXISTS crm_inovare
 USE crm_inovare;
 
 -- =========================================================
--- 1) USUÁRIOS
+-- 1) USUÃRIOS
 -- =========================================================
 CREATE TABLE IF NOT EXISTS usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
 CREATE INDEX idx_usuarios_email ON usuarios(email);
 
 -- =========================================================
--- 2) LOGS DE AÇÕES DO USUÁRIO (AUDITORIA)
+-- 2) LOGS DE AÃ‡Ã•ES DO USUÃRIO (AUDITORIA)
 -- =========================================================
 CREATE TABLE IF NOT EXISTS logs_usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS pacotes (
 CREATE UNIQUE INDEX uq_pacotes_nome ON pacotes(nome);
 
 -- =========================================================
--- 6) SERVIÇOS INCLUSOS EM CADA PACOTE
+-- 6) SERVIÃ‡OS INCLUSOS EM CADA PACOTE
 -- =========================================================
 CREATE TABLE IF NOT EXISTS pacotes_servicos (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -168,13 +168,20 @@ CREATE TABLE IF NOT EXISTS proposta_itens (
 CREATE INDEX idx_proposta_itens_proposta ON proposta_itens(id_proposta);
 
 -- =========================================================
--- 8) INTERAÇÕES (PIPELINE CRM)
+-- 8) INTERACOES (PIPELINE CRM)
 -- =========================================================
+CREATE TABLE IF NOT EXISTS interacoes_tipos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tipo_interacao VARCHAR(100) NOT NULL,
+    UNIQUE KEY uq_interacoes_tipos_tipo (tipo_interacao)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS interacoes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     id_cliente INT NOT NULL,
     id_usuario INT,
-    tipo ENUM('ligacao','email','reuniao','whatsapp','visita','outro') DEFAULT 'outro',
+    id_tipo_interacao INT,
+    tipo VARCHAR(100),
     descricao TEXT,
     proxima_acao DATE,
     resultado ENUM('pendente','concluido') DEFAULT 'pendente',
@@ -182,10 +189,12 @@ CREATE TABLE IF NOT EXISTS interacoes (
     CONSTRAINT fk_interacoes_cliente
       FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE CASCADE,
     CONSTRAINT fk_interacoes_usuario
-      FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE SET NULL
+      FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE SET NULL,
+    CONSTRAINT fk_interacoes_tipo
+      FOREIGN KEY (id_tipo_interacao) REFERENCES interacoes_tipos(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
-CREATE INDEX idx_interacoes_tipo ON interacoes(tipo);
+CREATE INDEX idx_interacoes_id_tipo ON interacoes(id_tipo_interacao);
 CREATE INDEX idx_interacoes_resultado ON interacoes(resultado);
 
 -- =========================================================
@@ -206,9 +215,9 @@ CREATE TABLE IF NOT EXISTS sistema_logs (
 -- =========================================================
 INSERT INTO pacotes (nome, descricao, conformidade, tipo_calculo, valor_implantacao_base, valor_mensal_base)
 VALUES
-('Pacote 1', 'Pesquisa + Mapeamento Psicossocial + Relatório Técnico (NR-01) + Educação em Saúde', 'Atende à NR-01 – Conformidade legal', 'fixo', 9100.00, 0.00),
-('Pacote 2', 'Tudo do Pacote 1 + Atendimento Médico e Psicológico 24h (sinistralidade de 10%)', 'NR-01 + Cuidado integral – assistência em saúde', 'sinistralidade', 4200.00, 1775.00),
-('Pacote 3', 'Tudo do Pacote 2 + Consultas mensais com psicólogo e psiquiatra (franquia 10%)', 'NR-01 + Cuidado integral + gestão emocional avançada', 'franquia', 4200.00, 2570.00)
+('Pacote 1', 'Pesquisa + Mapeamento Psicossocial + RelatÃ³rio TÃ©cnico (NR-01) + EducaÃ§Ã£o em SaÃºde', 'Atende Ã  NR-01 â€“ Conformidade legal', 'fixo', 9100.00, 0.00),
+('Pacote 2', 'Tudo do Pacote 1 + Atendimento MÃ©dico e PsicolÃ³gico 24h (sinistralidade de 10%)', 'NR-01 + Cuidado integral â€“ assistÃªncia em saÃºde', 'sinistralidade', 4200.00, 1775.00),
+('Pacote 3', 'Tudo do Pacote 2 + Consultas mensais com psicÃ³logo e psiquiatra (franquia 10%)', 'NR-01 + Cuidado integral + gestÃ£o emocional avanÃ§ada', 'franquia', 4200.00, 2570.00)
 ON DUPLICATE KEY UPDATE nome = VALUES(nome);
 
 UPDATE usuarios SET senha_hash = '$2y$10$VoCGUrN4mBVFUkFqEqhKp.sn.0Py.cydZzxH8ZbI4hrKmqf5aj5p2' WHERE email = 'admin@inovare.com';
@@ -229,13 +238,13 @@ CREATE TABLE IF NOT EXISTS configuracoes (
 
 INSERT INTO configuracoes (empresa_nome, logotipo_url, endereco, email_contato, telefone, instagram, rodape)
 VALUES (
-  'Inovare Soluções em Saúde',
+  'Inovare SoluÃ§Ãµes em SaÃºde',
   'https://inovaress.com/imagens/logo-inovare.png',
-  'Tv. Humaitá, 1733 – 1º andar, Sala 02 – Pedreira – Belém/PA',
+  'Tv. HumaitÃ¡, 1733 â€“ 1Âº andar, Sala 02 â€“ Pedreira â€“ BelÃ©m/PA',
   'diretoria@inovaress.com',
   '(91) 98127-6875 / (91) 98425-7770',
   '@inovaresolucoesemsaude',
-  '© Inovare Soluções em Saúde — Todos os direitos reservados.'
+  'Â© Inovare SoluÃ§Ãµes em SaÃºde â€” Todos os direitos reservados.'
 );
 
 CREATE TABLE IF NOT EXISTS menus (
@@ -249,3 +258,5 @@ CREATE TABLE IF NOT EXISTS menus (
   ativo TINYINT(1) DEFAULT 1,
   FOREIGN KEY (parent_id) REFERENCES menus(id) ON DELETE CASCADE
 );
+
+
