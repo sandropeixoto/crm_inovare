@@ -8,7 +8,8 @@ declare(strict_types=1);
 date_default_timezone_set(getenv('CRM_TZ') ?: 'America/Sao_Paulo');
 
 define('APP_ENV', getenv('CRM_ENV') ?: 'development');
-define('APP_BASE_PATH', rtrim(getenv('CRM_BASE_PATH') ?: '/inovare/public', '/') . '/');
+$defaultBasePath = (getenv('REPLIT_DEPLOYMENT') || getenv('REPL_ID')) ? '/' : '/inovare/public';
+define('APP_BASE_PATH', rtrim(getenv('CRM_BASE_PATH') ?: $defaultBasePath, '/') . '/');
 
 if (APP_ENV !== 'development') {
     ini_set('display_errors', '0');
@@ -335,7 +336,7 @@ function app_config(): array
     $config = default_app_config();
 
     try {
-        $stmt = pdo()->query("SELECT * FROM configuracoes WHERE ativo=1 ORDER BY id DESC LIMIT 1");
+        $stmt = pdo()->query("SELECT * FROM configuracoes WHERE ativo=TRUE ORDER BY id DESC LIMIT 1");
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($row) {
             $config = $row + $config;
@@ -443,7 +444,7 @@ function load_menu_tree(string $perfil): array
     }
 
     try {
-        $stmt = pdo()->query("SELECT * FROM menus WHERE ativo=1 ORDER BY parent_id, ordem, titulo");
+        $stmt = pdo()->query("SELECT * FROM menus WHERE ativo=TRUE ORDER BY parent_id, ordem, titulo");
         $menus = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
         log_system('warning', 'Falha ao carregar menus dinâmicos: ' . $e->getMessage(), __FILE__, __LINE__);

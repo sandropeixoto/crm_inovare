@@ -8,7 +8,7 @@ if (!empty($_SESSION['user'])) {
 }
 
 // Busca configurações da empresa
-$config = run_query("SELECT * FROM configuracoes WHERE ativo=1 LIMIT 1")[0] ?? [
+$config = run_query("SELECT * FROM configuracoes WHERE ativo=TRUE LIMIT 1")[0] ?? [
   'empresa_nome' => 'CRM Inovare',
   'logotipo_url' => '/inovare/public/assets/logo.png',
   'rodape' => 'Sistema Inovare - Todos os direitos reservados.'
@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if (!$email || !$senha) {
     $erro = 'Informe usuário e senha.';
   } else {
-    $user = run_query("SELECT * FROM usuarios WHERE email=? AND ativo=1", [$email]);
+    $user = run_query("SELECT * FROM usuarios WHERE email=? AND ativo=TRUE", [$email]);
     if ($user && password_verify($senha, $user[0]['senha_hash'])) {
       session_regenerate_id(true);
       $_SESSION['user'] = [
