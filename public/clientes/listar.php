@@ -53,7 +53,7 @@ $sql = "SELECT c.*, u.nome AS responsavel_nome
 $clientes = run_query($sql, $params);
 
 // carregar opções de responsáveis
-$usuarios = run_query("SELECT id, nome FROM usuarios WHERE ativo = 1 ORDER BY nome ASC");
+$usuarios = run_query("SELECT id, nome FROM usuarios WHERE ativo = TRUE ORDER BY nome ASC");
 
 log_user_action(current_user()['id'] ?? null, 'Listou clientes', 'clientes', null, ['filtros' => $_GET], ['total' => $total]);
 

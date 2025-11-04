@@ -12,7 +12,7 @@ $propostaId = $idFromPost ?: $idFromRequest;
 $editando = $propostaId > 0;
 
 $clientes = run_query('SELECT id, nome_fantasia FROM clientes ORDER BY nome_fantasia ASC');
-$pacotes = run_query('SELECT id, nome FROM pacotes WHERE ativo = 1 ORDER BY nome ASC');
+$pacotes = run_query('SELECT id, nome FROM pacotes WHERE ativo = TRUE ORDER BY nome ASC');
 $modelos = run_query('SELECT id, titulo, categoria FROM modelos_documentos WHERE ativo = TRUE ORDER BY categoria, titulo ASC');
 
 $propostaAtual = null;

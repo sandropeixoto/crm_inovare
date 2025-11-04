@@ -61,7 +61,7 @@ $sql = "SELECT p.*, c.nome_fantasia, pa.nome AS pacote, u.nome AS usuario_nome
         LIMIT $por_pagina OFFSET $offset";
 $propostas = run_query($sql, $params);
 
-$usuarios = run_query("SELECT id,nome FROM usuarios WHERE ativo=1 ORDER BY nome ASC");
+$usuarios = run_query("SELECT id,nome FROM usuarios WHERE ativo=TRUE ORDER BY nome ASC");
 
 log_user_action(current_user()['id'] ?? null, 'Listou propostas', 'propostas', null, $_GET, ['total'=>$total]);
 

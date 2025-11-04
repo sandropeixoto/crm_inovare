@@ -29,7 +29,7 @@ if (!$prop) {
 }
 
 $itens = run_query('SELECT * FROM proposta_itens WHERE id_proposta = ? ORDER BY id ASC', [$id]);
-$config = run_query('SELECT * FROM configuracoes WHERE ativo=1 ORDER BY id DESC LIMIT 1')[0] ?? null;
+$config = run_query('SELECT * FROM configuracoes WHERE ativo=TRUE ORDER BY id DESC LIMIT 1')[0] ?? null;
 
 log_user_action(current_user()['id'] ?? null, 'Gerou PDF da proposta', 'propostas', $id, null, $prop);
 
