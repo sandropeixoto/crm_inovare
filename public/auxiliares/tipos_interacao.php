@@ -3,28 +3,11 @@ require_once __DIR__ . '/../../config/db.php';
 require_auth();
 require_role(['admin', 'gestor']);
 
-$page_title = 'Unidades de Medida';
-$breadcrumb = 'Início > Auxiliares > Unidades de Medida';
+$page_title = 'Tipos de Interação';
+$breadcrumb = 'Início > Auxiliares > Tipos de Interação';
 
 $mensagem = '';
 $erro = '';
-
-// Verificar se tabela existe, senão criar
-try {
-    run_query("SELECT 1 FROM unidades_medida LIMIT 1");
-} catch (Exception $e) {
-    try {
-        run_query("
-            CREATE TABLE IF NOT EXISTS unidades_medida (
-                id SERIAL PRIMARY KEY,
-                nome VARCHAR(100) NOT NULL,
-                sigla VARCHAR(10),
-                ativo BOOLEAN DEFAULT TRUE,
-                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ");
-    } catch (Exception $e2) {}
-}
 
 // Processar exclusão
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['acao'] === 'excluir') {
@@ -32,9 +15,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
     $id = (int)($_POST['id'] ?? 0);
     
     try {
-        run_query("DELETE FROM unidades_medida WHERE id = ?", [$id]);
-        log_user_action($user['id'] ?? null, 'Excluiu unidade de medida', 'unidades_medida', $id);
-        $mensagem = 'Unidade de medida excluída com sucesso!';
+        run_query("DELETE FROM interacoes_tipos WHERE id = ?", [$id]);
+        log_user_action($user['id'] ?? null, 'Excluiu tipo de interação', 'interacoes_tipos', $id);
+        $mensagem = 'Tipo de interação excluído com sucesso!';
     } catch (Exception $e) {
         $erro = 'Erro ao excluir: ' . $e->getMessage();
     }
@@ -45,24 +28,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
     validate_csrf_token($_POST['_token'] ?? null);
     
     $id = (int)($_POST['id'] ?? 0);
-    $nome = trim($_POST['nome'] ?? '');
-    $sigla = trim($_POST['sigla'] ?? '');
-    $ativo = isset($_POST['ativo']) ? TRUE : FALSE;
+    $tipo_interacao = trim($_POST['tipo_interacao'] ?? '');
     
-    if (empty($nome)) {
-        $erro = 'O nome é obrigatório.';
+    if (empty($tipo_interacao)) {
+        $erro = 'O tipo de interação é obrigatório.';
     } else {
         try {
             if ($id > 0) {
-                run_query("UPDATE unidades_medida SET nome = ?, sigla = ?, ativo = ? WHERE id = ?", 
-                         [$nome, $sigla, $ativo, $id]);
-                log_user_action($user['id'] ?? null, 'Atualizou unidade de medida', 'unidades_medida', $id);
-                $mensagem = 'Unidade de medida atualizada com sucesso!';
+                // Atualizar
+                run_query("UPDATE interacoes_tipos SET tipo_interacao = ? WHERE id = ?", [$tipo_interacao, $id]);
+                log_user_action($user['id'] ?? null, 'Atualizou tipo de interação', 'interacoes_tipos', $id);
+                $mensagem = 'Tipo de interação atualizado com sucesso!';
             } else {
-                run_query("INSERT INTO unidades_medida (nome, sigla, ativo) VALUES (?, ?, ?)", 
-                         [$nome, $sigla, $ativo]);
-                log_user_action($user['id'] ?? null, 'Criou unidade de medida', 'unidades_medida', null);
-                $mensagem = 'Unidade de medida criada com sucesso!';
+                // Inserir
+                run_query("INSERT INTO interacoes_tipos (tipo_interacao) VALUES (?)", [$tipo_interacao]);
+                log_user_action($user['id'] ?? null, 'Criou tipo de interação', 'interacoes_tipos', null);
+                $mensagem = 'Tipo de interação criado com sucesso!';
             }
         } catch (Exception $e) {
             $erro = 'Erro ao salvar: ' . $e->getMessage();
@@ -71,13 +52,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
 }
 
 // Buscar registros
-$registros = run_query("SELECT * FROM unidades_medida ORDER BY nome");
+$registros = run_query("SELECT * FROM interacoes_tipos ORDER BY tipo_interacao");
 
 // Preparar dados para edição
 $editando = null;
 if (isset($_GET['editar'])) {
     $id_editar = (int)$_GET['editar'];
-    $result = run_query("SELECT * FROM unidades_medida WHERE id = ?", [$id_editar]);
+    $result = run_query("SELECT * FROM interacoes_tipos WHERE id = ?", [$id_editar]);
     if ($result) {
         $editando = $result[0];
     }
@@ -106,7 +87,7 @@ ob_start();
     <div class="col-md-4">
         <div class="card card-primary">
             <div class="card-header">
-                <h3 class="card-title"><?= $editando ? 'Editar' : 'Nova' ?> Unidade de Medida</h3>
+                <h3 class="card-title"><?= $editando ? 'Editar' : 'Novo' ?> Tipo de Interação</h3>
             </div>
             <form method="POST">
                 <?= csrf_field() ?>
@@ -117,24 +98,9 @@ ob_start();
                 
                 <div class="card-body">
                     <div class="form-group">
-                        <label>Nome *</label>
-                        <input type="text" name="nome" class="form-control" 
-                               value="<?= e($editando['nome'] ?? '') ?>" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Sigla</label>
-                        <input type="text" name="sigla" class="form-control" maxlength="10"
-                               value="<?= e($editando['sigla'] ?? '') ?>">
-                        <small class="form-text text-muted">Ex: kg, m, un, cx</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <div class="custom-control custom-checkbox">
-                            <input type="checkbox" name="ativo" class="custom-control-input" id="ativo" 
-                                   <?= (!$editando || ($editando['ativo'] ?? false)) ? 'checked' : '' ?>>
-                            <label class="custom-control-label" for="ativo">Ativo</label>
-                        </div>
+                        <label>Tipo de Interação *</label>
+                        <input type="text" name="tipo_interacao" class="form-control" 
+                               value="<?= e($editando['tipo_interacao'] ?? '') ?>" required>
                     </div>
                 </div>
                 
@@ -143,7 +109,7 @@ ob_start();
                         <i class="fas fa-save"></i> Salvar
                     </button>
                     <?php if ($editando): ?>
-                    <a href="<?= app_url('auxiliares/unidades_medida.php') ?>" class="btn btn-secondary">
+                    <a href="<?= app_url('auxiliares/tipos_interacao.php') ?>" class="btn btn-secondary">
                         <i class="fas fa-times"></i> Cancelar
                     </a>
                     <?php endif; ?>
@@ -155,39 +121,29 @@ ob_start();
     <div class="col-md-8">
         <div class="card">
             <div class="card-header">
-                <h3 class="card-title">Unidades de Medida Cadastradas</h3>
+                <h3 class="card-title">Tipos de Interação Cadastrados</h3>
             </div>
             <div class="card-body p-0">
                 <table class="table table-striped">
                     <thead>
                         <tr>
                             <th width="80">ID</th>
-                            <th>Nome</th>
-                            <th>Sigla</th>
-                            <th width="80">Status</th>
+                            <th>Tipo de Interação</th>
                             <th width="150" class="text-right">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($registros)): ?>
                         <tr>
-                            <td colspan="5" class="text-center text-muted">
-                                Nenhuma unidade de medida cadastrada
+                            <td colspan="3" class="text-center text-muted">
+                                Nenhum tipo de interação cadastrado
                             </td>
                         </tr>
                         <?php else: ?>
                             <?php foreach ($registros as $reg): ?>
                             <tr>
                                 <td><?= $reg['id'] ?></td>
-                                <td><?= e($reg['nome']) ?></td>
-                                <td><code><?= e($reg['sigla'] ?? '') ?></code></td>
-                                <td>
-                                    <?php if ($reg['ativo']): ?>
-                                        <span class="badge badge-success">Ativo</span>
-                                    <?php else: ?>
-                                        <span class="badge badge-secondary">Inativo</span>
-                                    <?php endif; ?>
-                                </td>
+                                <td><?= e($reg['tipo_interacao']) ?></td>
                                 <td class="text-right">
                                     <a href="?editar=<?= $reg['id'] ?>" class="btn btn-sm btn-info" title="Editar">
                                         <i class="fas fa-edit"></i>
