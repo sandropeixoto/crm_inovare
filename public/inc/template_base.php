@@ -29,16 +29,59 @@ function resolve_menu_link(?string $link, string $base_path): string
     return $base_path . ltrim($link, '/');
 }
 
+function normalize_url_path(string $url): string
+{
+    $path = parse_url($url, PHP_URL_PATH) ?? '';
+    if ($path === '') {
+        return '';
+    }
+
+    $path = '/' . ltrim($path, '/');
+    $path = rtrim($path, '/');
+
+    return $path === '' ? '/' : $path;
+}
+
 function menu_is_active(string $link, string $current_url): bool
 {
     if (!$link || $link === '#') {
         return false;
     }
 
-    $path = parse_url($link, PHP_URL_PATH) ?? $link;
-    $basename = basename($path);
-    return $basename && strpos($current_url, $basename) !== false;
+    $linkPath = normalize_url_path($link);
+    if ($linkPath === '') {
+        return false;
+    }
+
+    $currentPath = normalize_url_path($current_url);
+
+    if ($linkPath === $currentPath) {
+        return true;
+    }
+
+    if ($linkPath !== '/' && str_starts_with($currentPath, $linkPath . '/')) {
+        return true;
+    }
+
+    return false;
 }
+
+function menu_has_active_child(array $children, string $current_url, string $base_path): bool
+{
+    foreach ($children as $child) {
+        $childLink = resolve_menu_link($child['link'] ?? '#', $base_path);
+        if (menu_is_active($childLink, $current_url)) {
+            return true;
+        }
+
+        if (!empty($child['filhos']) && menu_has_active_child($child['filhos'], $current_url, $base_path)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -53,7 +96,7 @@ function menu_is_active(string $link, string $current_url): bool
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- AdminLTE -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
-  
+
   <style>
     .brand-link {
       border-bottom: 1px solid #4b5563;
@@ -137,12 +180,25 @@ function menu_is_active(string $link, string $current_url): bool
           <?php foreach ($menus as $menu): ?>
             <?php
               $link = resolve_menu_link($menu['link'] ?? '#', $base_path);
-              $isActive = menu_is_active($link, $current_url);
               $hasChildren = !empty($menu['filhos']);
+              $isActive = menu_is_active($link, $current_url);
+
+              if (!$isActive && $hasChildren) {
+                  $isActive = menu_has_active_child($menu['filhos'], $current_url, $base_path);
+              }
+
+              $itemClasses = ['nav-item'];
+              if ($hasChildren) {
+                  $itemClasses[] = 'has-treeview';
+                  if ($isActive) {
+                      $itemClasses[] = 'menu-open';
+                      $itemClasses[] = 'menu-is-opening';
+                  }
+              }
             ?>
-            <li class="nav-item <?= $hasChildren ? 'has-treeview' : '' ?>">
+            <li class="<?= implode(' ', $itemClasses) ?>">
               <a href="<?= $hasChildren ? '#' : e($link) ?>" class="nav-link <?= $isActive ? 'active' : '' ?>">
-                <i class="nav-icon"><?= e($menu['icone'] ?? '📁') ?></i>
+                <i class="nav-icon"><?= e($menu['icone'] ?? '•') ?></i>
                 <p>
                   <?= e($menu['titulo'] ?? 'Módulo') ?>
                   <?php if ($hasChildren): ?>
@@ -151,17 +207,38 @@ function menu_is_active(string $link, string $current_url): bool
                 </p>
               </a>
               <?php if ($hasChildren): ?>
-                <ul class="nav nav-treeview">
+                <ul class="nav nav-treeview" <?= $isActive ? 'style="display:block;"' : '' ?>>
                   <?php foreach ($menu['filhos'] as $child): ?>
-                    <?php 
+                    <?php
                       $childLink = resolve_menu_link($child['link'] ?? '#', $base_path);
+                      $childHasChildren = !empty($child['filhos']);
                       $childActive = menu_is_active($childLink, $current_url);
+
+                      if (!$childActive && $childHasChildren) {
+                          $childActive = menu_has_active_child($child['filhos'], $current_url, $base_path);
+                      }
                     ?>
-                    <li class="nav-item">
+                    <li class="nav-item <?= $childHasChildren ? 'has-treeview' : '' ?>">
                       <a href="<?= e($childLink) ?>" class="nav-link <?= $childActive ? 'active' : '' ?>">
                         <i class="far fa-circle nav-icon"></i>
                         <p><?= e($child['titulo'] ?? 'Opção') ?></p>
                       </a>
+                      <?php if ($childHasChildren): ?>
+                        <ul class="nav nav-treeview" <?= $childActive ? 'style="display:block;"' : '' ?>>
+                          <?php foreach ($child['filhos'] as $grandchild): ?>
+                            <?php
+                              $grandchildLink = resolve_menu_link($grandchild['link'] ?? '#', $base_path);
+                              $grandchildActive = menu_is_active($grandchildLink, $current_url);
+                            ?>
+                            <li class="nav-item">
+                              <a href="<?= e($grandchildLink) ?>" class="nav-link <?= $grandchildActive ? 'active' : '' ?>">
+                                <i class="far fa-dot-circle nav-icon"></i>
+                                <p><?= e($grandchild['titulo'] ?? 'Opção') ?></p>
+                              </a>
+                            </li>
+                          <?php endforeach; ?>
+                        </ul>
+                      <?php endif; ?>
                     </li>
                   <?php endforeach; ?>
                 </ul>
