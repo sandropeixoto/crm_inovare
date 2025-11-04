@@ -456,7 +456,7 @@ ob_start();
     </div>
   </div>
 
-  <script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tinymce@6.7.0/tinymce.min.js" referrerpolicy="origin"></script>
   <script>
     document.querySelectorAll('.var-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
