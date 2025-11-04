@@ -106,11 +106,11 @@ load_env_file($rootPath . '/.env');
 /**
  * Configuração — ajuste para o seu ambiente
  */
-define('DB_HOST', env('CRM_DB_HOST', 'localhost'));
-define('DB_NAME', env('CRM_DB_NAME', 'crm_inovare'));
-define('DB_USER', env('CRM_DB_USER', 'root'));
-define('DB_PASS', env('CRM_DB_PASS', 'SENHA_FORTE_AQUI'));
-define('DB_CHARSET', 'utf8mb4');
+define('DB_HOST', env('PGHOST', env('CRM_DB_HOST', 'localhost')));
+define('DB_NAME', env('PGDATABASE', env('CRM_DB_NAME', 'crm_inovare')));
+define('DB_USER', env('PGUSER', env('CRM_DB_USER', 'root')));
+define('DB_PASS', env('PGPASSWORD', env('CRM_DB_PASS', 'SENHA_FORTE_AQUI')));
+define('DB_PORT', env('PGPORT', '5432'));
 
 function pdo(): PDO
 {
@@ -119,7 +119,7 @@ function pdo(): PDO
         return $pdo;
     }
 
-    $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
+    $dsn = 'pgsql:host=' . DB_HOST . ';port=' . DB_PORT . ';dbname=' . DB_NAME;
     $options = [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
