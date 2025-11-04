@@ -1,488 +1,494 @@
 <?php
-require_once '../../config/db.php';
+require_once __DIR__ . '/../../config/db.php';
+
 ensure_session_security();
+require_role(['admin', 'gestor']);
 
-if (!isset($_SESSION['user_id'])) {
-    header('Location: ../login.php');
-    exit;
-}
-
-$user_role = $_SESSION['user_role'] ?? '';
-if (!in_array($user_role, ['admin', 'gestor'])) {
-    die('Acesso negado');
-}
-
+$user = current_user();
 $action = $_GET['action'] ?? 'list';
-$id = $_GET['id'] ?? null;
+$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $success_msg = $_GET['success'] ?? '';
 $error_msg = $_GET['error'] ?? '';
 
+$modelo = [];
+$formErrors = [];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? $action;
+    $id = isset($_POST['id']) ? (int)$_POST['id'] : $id;
+
+    validate_csrf_token($_POST['_token'] ?? null);
+    $pdo = pdo();
+
     if ($action === 'create' || $action === 'edit') {
-        if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
-            die('Token CSRF inválido');
+        $modelo = [
+            'titulo'        => trim($_POST['titulo'] ?? ''),
+            'descricao'     => trim($_POST['descricao'] ?? ''),
+            'categoria'     => trim($_POST['categoria'] ?? ''),
+            'conteudo_html' => $_POST['conteudo_html'] ?? '',
+            'ativo'         => isset($_POST['ativo']) ? 1 : 0,
+        ];
+
+        if ($modelo['titulo'] === '') {
+            $formErrors[] = 'Informe o título do modelo.';
+        }
+        if ($modelo['categoria'] === '') {
+            $formErrors[] = 'Informe a categoria do modelo.';
+        }
+        if (trim((string)$modelo['conteudo_html']) === '') {
+            $formErrors[] = 'Informe o conteúdo do modelo.';
         }
 
-        $titulo = trim($_POST['titulo'] ?? '');
-        $descricao = trim($_POST['descricao'] ?? '');
-        $categoria = trim($_POST['categoria'] ?? '');
-        $conteudo_html = $_POST['conteudo_html'] ?? '';
-        $ativo = isset($_POST['ativo']) ? TRUE : FALSE;
+        preg_match_all('/\{\{([^}]+)\}\}/', (string)$modelo['conteudo_html'], $matches);
+        $variaveis = !empty($matches[1]) ? array_unique(array_map('trim', $matches[1])) : [];
+        $modelo['variaveis_usadas'] = implode(',', $variaveis);
 
-        if (empty($titulo) || empty($categoria) || empty($conteudo_html)) {
-            $error_msg = 'Preencha todos os campos obrigatórios';
-        } else {
-            preg_match_all('/\{\{([^}]+)\}\}/', $conteudo_html, $matches);
-            $variaveis_usadas = !empty($matches[1]) ? implode(',', array_unique($matches[1])) : '';
-
+        if (!$formErrors) {
             if ($action === 'create') {
-                $sql = "INSERT INTO modelos_documentos (titulo, descricao, categoria, conteudo_html, variaveis_usadas, ativo) 
-                        VALUES (?, ?, ?, ?, ?, ?)";
-                $result = run_query($sql, [$titulo, $descricao, $categoria, $conteudo_html, $variaveis_usadas, $ativo]);
-                
-                if ($result) {
-                    log_user_action('criar', 'modelos_documentos', null, "Criou modelo: $titulo");
-                    header('Location: modelos_documentos.php?success=' . urlencode('Modelo criado com sucesso'));
-                    exit;
-                }
-            } else {
-                $sql = "UPDATE modelos_documentos SET titulo=?, descricao=?, categoria=?, conteudo_html=?, 
-                        variaveis_usadas=?, ativo=?, atualizado_em=CURRENT_TIMESTAMP WHERE id=?";
-                $result = run_query($sql, [$titulo, $descricao, $categoria, $conteudo_html, $variaveis_usadas, $ativo, $id]);
-                
-                if ($result) {
-                    log_user_action('editar', 'modelos_documentos', $id, "Editou modelo: $titulo");
-                    header('Location: modelos_documentos.php?success=' . urlencode('Modelo atualizado com sucesso'));
-                    exit;
-                }
+                $stmt = $pdo->prepare(
+                    'INSERT INTO modelos_documentos (titulo, descricao, categoria, conteudo_html, variaveis_usadas, ativo)
+                     VALUES (?,?,?,?,?,?)'
+                );
+                $stmt->execute([
+                    $modelo['titulo'],
+                    $modelo['descricao'],
+                    $modelo['categoria'],
+                    $modelo['conteudo_html'],
+                    $modelo['variaveis_usadas'],
+                    $modelo['ativo'],
+                ]);
+
+                $novoId = (int)$pdo->lastInsertId();
+                log_user_action(
+                    $user['id'] ?? null,
+                    'criar modelo de documento',
+                    'modelos_documentos',
+                    $novoId,
+                    null,
+                    ['titulo' => $modelo['titulo'], 'categoria' => $modelo['categoria']]
+                );
+
+                redirect(app_url('auxiliares/modelos_documentos.php?success=' . urlencode('Modelo criado com sucesso')));
             }
+
+            if ($action === 'edit') {
+                if ($id <= 0) {
+                    redirect(app_url('auxiliares/modelos_documentos.php?error=' . urlencode('Modelo inválido')));
+                }
+
+                $anterior = run_query('SELECT * FROM modelos_documentos WHERE id = ?', [$id])[0] ?? null;
+                if (!$anterior) {
+                    redirect(app_url('auxiliares/modelos_documentos.php?error=' . urlencode('Modelo não encontrado')));
+                }
+
+                $stmt = $pdo->prepare(
+                    'UPDATE modelos_documentos
+                        SET titulo = ?, descricao = ?, categoria = ?, conteudo_html = ?, variaveis_usadas = ?, ativo = ?, atualizado_em = CURRENT_TIMESTAMP
+                      WHERE id = ?'
+                );
+                $stmt->execute([
+                    $modelo['titulo'],
+                    $modelo['descricao'],
+                    $modelo['categoria'],
+                    $modelo['conteudo_html'],
+                    $modelo['variaveis_usadas'],
+                    $modelo['ativo'],
+                    $id,
+                ]);
+
+                log_user_action(
+                    $user['id'] ?? null,
+                    'editar modelo de documento',
+                    'modelos_documentos',
+                    $id,
+                    $anterior,
+                    ['titulo' => $modelo['titulo'], 'categoria' => $modelo['categoria']]
+                );
+
+                redirect(app_url('auxiliares/modelos_documentos.php?success=' . urlencode('Modelo atualizado com sucesso')));
+            }
+        } else {
+            $error_msg = implode(' ', $formErrors);
         }
     } elseif ($action === 'delete') {
-        if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
-            die('Token CSRF inválido');
+        if ($id <= 0) {
+            redirect(app_url('auxiliares/modelos_documentos.php?error=' . urlencode('Modelo inválido')));
         }
-        
-        $sql = "DELETE FROM modelos_documentos WHERE id=?";
-        $result = run_query($sql, [$id]);
-        
-        if ($result) {
-            log_user_action('excluir', 'modelos_documentos', $id, "Excluiu modelo ID: $id");
-            header('Location: modelos_documentos.php?success=' . urlencode('Modelo excluído com sucesso'));
-            exit;
+
+        $registro = run_query('SELECT * FROM modelos_documentos WHERE id = ?', [$id])[0] ?? null;
+        if (!$registro) {
+            redirect(app_url('auxiliares/modelos_documentos.php?error=' . urlencode('Modelo não encontrado')));
         }
+
+        $stmt = $pdo->prepare('DELETE FROM modelos_documentos WHERE id = ?');
+        $stmt->execute([$id]);
+
+        log_user_action(
+            $user['id'] ?? null,
+            'excluir modelo de documento',
+            'modelos_documentos',
+            $id,
+            $registro,
+            null
+        );
+
+        redirect(app_url('auxiliares/modelos_documentos.php?success=' . urlencode('Modelo excluído com sucesso')));
     } elseif ($action === 'duplicate') {
-        if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
-            die('Token CSRF inválido');
+        if ($id <= 0) {
+            redirect(app_url('auxiliares/modelos_documentos.php?error=' . urlencode('Modelo inválido')));
         }
-        
-        $sql = "SELECT * FROM modelos_documentos WHERE id=?";
-        $modelo = run_query($sql, [$id], true);
-        
-        if ($modelo) {
-            $novo_titulo = $modelo['titulo'] . ' (Cópia)';
-            $sql = "INSERT INTO modelos_documentos (titulo, descricao, categoria, conteudo_html, variaveis_usadas, ativo) 
-                    VALUES (?, ?, ?, ?, ?, FALSE)";
-            $result = run_query($sql, [
-                $novo_titulo, 
-                $modelo['descricao'], 
-                $modelo['categoria'], 
-                $modelo['conteudo_html'], 
-                $modelo['variaveis_usadas']
-            ]);
-            
-            if ($result) {
-                log_user_action('duplicar', 'modelos_documentos', $id, "Duplicou modelo: {$modelo['titulo']}");
-                header('Location: modelos_documentos.php?success=' . urlencode('Modelo duplicado com sucesso'));
-                exit;
-            }
+
+        $registro = run_query('SELECT * FROM modelos_documentos WHERE id = ?', [$id])[0] ?? null;
+        if (!$registro) {
+            redirect(app_url('auxiliares/modelos_documentos.php?error=' . urlencode('Modelo não encontrado')));
         }
+
+        $novoTitulo = $registro['titulo'] . ' (Cópia)';
+        $stmt = $pdo->prepare(
+            'INSERT INTO modelos_documentos (titulo, descricao, categoria, conteudo_html, variaveis_usadas, ativo)
+             VALUES (?,?,?,?,?,0)'
+        );
+        $stmt->execute([
+            $novoTitulo,
+            $registro['descricao'],
+            $registro['categoria'],
+            $registro['conteudo_html'],
+            $registro['variaveis_usadas'],
+        ]);
+
+        $novoId = (int)$pdo->lastInsertId();
+        log_user_action(
+            $user['id'] ?? null,
+            'duplicar modelo de documento',
+            'modelos_documentos',
+            $novoId,
+            $registro,
+            ['titulo' => $novoTitulo]
+        );
+
+        redirect(app_url('auxiliares/modelos_documentos.php?success=' . urlencode('Modelo duplicado com sucesso')));
     }
 }
+
+if (($action === 'edit') && !$modelo) {
+    if ($id <= 0) {
+        redirect(app_url('auxiliares/modelos_documentos.php?error=' . urlencode('Modelo inválido')));
+    }
+    $registro = run_query('SELECT * FROM modelos_documentos WHERE id = ?', [$id])[0] ?? null;
+    if (!$registro) {
+        redirect(app_url('auxiliares/modelos_documentos.php?error=' . urlencode('Modelo não encontrado')));
+    }
+    $modelo = $registro;
+}
+
+if ($action === 'create' && !$modelo) {
+    $modelo = [
+        'titulo'        => '',
+        'descricao'     => '',
+        'categoria'     => 'Proposta Comercial',
+        'conteudo_html' => '',
+        'ativo'         => 1,
+    ];
+}
+
+$search = '';
+$categoria_filter = '';
+$modelos = [];
+$categorias = [];
 
 if ($action === 'list') {
-    $search = $_GET['search'] ?? '';
-    $categoria_filter = $_GET['categoria'] ?? '';
-    
-    $sql = "SELECT * FROM modelos_documentos WHERE 1=1";
+    $search = trim($_GET['search'] ?? '');
+    $categoria_filter = trim($_GET['categoria'] ?? '');
+
+    $sql = 'SELECT * FROM modelos_documentos WHERE 1=1';
     $params = [];
-    
-    if ($search) {
+
+    if ($search !== '') {
         $busca = function_exists('mb_strtolower') ? mb_strtolower($search, 'UTF-8') : strtolower($search);
         $like = '%' . $busca . '%';
-        $sql .= " AND (LOWER(titulo) LIKE ? OR LOWER(descricao) LIKE ?)";
+        $sql .= ' AND (LOWER(titulo) LIKE ? OR LOWER(descricao) LIKE ?)';
         $params[] = $like;
         $params[] = $like;
     }
-    
-    if ($categoria_filter) {
-        $sql .= " AND categoria = ?";
+
+    if ($categoria_filter !== '') {
+        $sql .= ' AND categoria = ?';
         $params[] = $categoria_filter;
     }
-    
-    $sql .= " ORDER BY criado_em DESC";
+
+    $sql .= ' ORDER BY criado_em DESC';
     $modelos = run_query($sql, $params);
-    
-    $sql_categorias = "SELECT DISTINCT categoria FROM modelos_documentos ORDER BY categoria";
-    $categorias = run_query($sql_categorias);
+    $categorias = run_query('SELECT DISTINCT categoria FROM modelos_documentos ORDER BY categoria');
 }
 
-if ($action === 'edit' && $id) {
-    $sql = "SELECT * FROM modelos_documentos WHERE id=?";
-    $modelo = run_query($sql, [$id], true);
-    
-    if (!$modelo) {
-        header('Location: modelos_documentos.php?error=' . urlencode('Modelo não encontrado'));
-        exit;
-    }
-}
+$page_title = 'Modelos de Documentos';
+$breadcrumb = 'Auxiliares > Modelos de Documentos';
 
-include '../inc/template_base.php';
+ob_start();
 ?>
-
-<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
-
-<div class="content-wrapper">
-    <section class="content-header">
-        <div class="container-fluid">
-            <div class="row mb-2">
-                <div class="col-sm-6">
-                    <h1>
-                        <?php 
-                        if ($action === 'create') echo 'Novo Modelo de Documento';
-                        elseif ($action === 'edit') echo 'Editar Modelo de Documento';
-                        else echo 'Modelos de Documentos';
-                        ?>
-                    </h1>
-                </div>
-                <div class="col-sm-6">
-                    <ol class="breadcrumb float-sm-right">
-                        <li class="breadcrumb-item"><a href="../index.php">Home</a></li>
-                        <li class="breadcrumb-item active">Modelos de Documentos</li>
-                    </ol>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="content">
-        <div class="container-fluid">
-            <?php if ($success_msg): ?>
-                <div class="alert alert-success alert-dismissible fade show">
-                    <?= htmlspecialchars($success_msg) ?>
-                    <button type="button" class="close" data-dismiss="alert">&times;</button>
-                </div>
-            <?php endif; ?>
-            
-            <?php if ($error_msg): ?>
-                <div class="alert alert-danger alert-dismissible fade show">
-                    <?= htmlspecialchars($error_msg) ?>
-                    <button type="button" class="close" data-dismiss="alert">&times;</button>
-                </div>
-            <?php endif; ?>
-
-            <?php if ($action === 'list'): ?>
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Gerenciar Modelos</h3>
-                        <div class="card-tools">
-                            <a href="?action=create" class="btn btn-primary btn-sm">
-                                <i class="fas fa-plus"></i> Novo Modelo
-                            </a>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <form method="GET" class="mb-3">
-                            <div class="row">
-                                <div class="col-md-5">
-                                    <input type="text" name="search" class="form-control" 
-                                           placeholder="Buscar por título ou descrição..." 
-                                           value="<?= htmlspecialchars($search) ?>">
-                                </div>
-                                <div class="col-md-4">
-                                    <select name="categoria" class="form-control">
-                                        <option value="">Todas as Categorias</option>
-                                        <?php foreach ($categorias as $cat): ?>
-                                            <option value="<?= htmlspecialchars($cat['categoria']) ?>" 
-                                                    <?= $categoria_filter === $cat['categoria'] ? 'selected' : '' ?>>
-                                                <?= htmlspecialchars($cat['categoria']) ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <button type="submit" class="btn btn-info">
-                                        <i class="fas fa-search"></i> Filtrar
-                                    </button>
-                                    <a href="modelos_documentos.php" class="btn btn-secondary">Limpar</a>
-                                </div>
-                            </div>
-                        </form>
-
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Título</th>
-                                        <th>Categoria</th>
-                                        <th>Descrição</th>
-                                        <th>Variáveis</th>
-                                        <th>Status</th>
-                                        <th>Criado em</th>
-                                        <th>Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (empty($modelos)): ?>
-                                        <tr>
-                                            <td colspan="8" class="text-center">Nenhum modelo encontrado</td>
-                                        </tr>
-                                    <?php else: ?>
-                                        <?php foreach ($modelos as $m): ?>
-                                            <tr>
-                                                <td><?= $m['id'] ?></td>
-                                                <td><strong><?= htmlspecialchars($m['titulo']) ?></strong></td>
-                                                <td>
-                                                    <span class="badge badge-info">
-                                                        <?= htmlspecialchars($m['categoria']) ?>
-                                                    </span>
-                                                </td>
-                                                <td><?= htmlspecialchars(substr($m['descricao'] ?? '', 0, 100)) ?></td>
-                                                <td>
-                                                    <small class="text-muted">
-                                                        <?= $m['variaveis_usadas'] ? count(explode(',', $m['variaveis_usadas'])) : 0 ?> variáveis
-                                                    </small>
-                                                </td>
-                                                <td>
-                                                    <?php if ($m['ativo']): ?>
-                                                        <span class="badge badge-success">Ativo</span>
-                                                    <?php else: ?>
-                                                        <span class="badge badge-secondary">Inativo</span>
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td><?= date('d/m/Y H:i', strtotime($m['criado_em'])) ?></td>
-                                                <td>
-                                                    <a href="?action=edit&id=<?= $m['id'] ?>" 
-                                                       class="btn btn-sm btn-warning" title="Editar">
-                                                        <i class="fas fa-edit"></i>
-                                                    </a>
-                                                    
-                                                    <form method="POST" style="display:inline;" 
-                                                          onsubmit="return confirm('Duplicar este modelo?')">
-                                                        <input type="hidden" name="csrf_token" value="<?= csrf_field() ?>">
-                                                        <button type="submit" name="action" value="duplicate" 
-                                                                class="btn btn-sm btn-info" title="Duplicar">
-                                                            <i class="fas fa-copy"></i>
-                                                        </button>
-                                                    </form>
-                                                    
-                                                    <form method="POST" action="?action=delete&id=<?= $m['id'] ?>" 
-                                                          style="display:inline;" 
-                                                          onsubmit="return confirm('Tem certeza que deseja excluir?')">
-                                                        <input type="hidden" name="csrf_token" value="<?= csrf_field() ?>">
-                                                        <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
-                                                            <i class="fas fa-trash"></i>
-                                                        </button>
-                                                    </form>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-            <?php elseif ($action === 'create' || $action === 'edit'): ?>
-                <div class="row">
-                    <div class="col-md-9">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3 class="card-title">
-                                    <?= $action === 'create' ? 'Criar Novo Modelo' : 'Editar Modelo' ?>
-                                </h3>
-                            </div>
-                            <div class="card-body">
-                                <form method="POST">
-                                    <input type="hidden" name="csrf_token" value="<?= csrf_field() ?>">
-                                    
-                                    <div class="form-group">
-                                        <label for="titulo">Título do Modelo *</label>
-                                        <input type="text" class="form-control" id="titulo" name="titulo" 
-                                               value="<?= htmlspecialchars($modelo['titulo'] ?? '') ?>" required>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="categoria">Categoria *</label>
-                                        <input type="text" class="form-control" id="categoria" name="categoria" 
-                                               value="<?= htmlspecialchars($modelo['categoria'] ?? 'Proposta Comercial') ?>" 
-                                               placeholder="Ex: Proposta Comercial, Contrato, Orçamento" required>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="descricao">Descrição</label>
-                                        <textarea class="form-control" id="descricao" name="descricao" 
-                                                  rows="2"><?= htmlspecialchars($modelo['descricao'] ?? '') ?></textarea>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="conteudo_html">Conteúdo do Modelo *</label>
-                                        <textarea id="conteudo_html" name="conteudo_html" class="form-control"><?= htmlspecialchars($modelo['conteudo_html'] ?? '') ?></textarea>
-                                        <small class="form-text text-muted">
-                                            Use as variáveis da lista ao lado para criar um modelo dinâmico.
-                                        </small>
-                                    </div>
-                                    
-                                    <div class="form-check mb-3">
-                                        <input type="checkbox" class="form-check-input" id="ativo" name="ativo" 
-                                               <?= ($modelo['ativo'] ?? true) ? 'checked' : '' ?>>
-                                        <label class="form-check-label" for="ativo">Modelo Ativo</label>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <button type="submit" class="btn btn-success">
-                                            <i class="fas fa-save"></i> Salvar Modelo
-                                        </button>
-                                        <a href="modelos_documentos.php" class="btn btn-secondary">
-                                            <i class="fas fa-arrow-left"></i> Voltar
-                                        </a>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-3">
-                        <div class="card card-primary">
-                            <div class="card-header">
-                                <h3 class="card-title">Variáveis Disponíveis</h3>
-                            </div>
-                            <div class="card-body" style="max-height: 600px; overflow-y: auto;">
-                                <p class="text-sm">Clique para copiar e colar no editor:</p>
-                                
-                                <h6 class="mt-3"><strong>Cliente</strong></h6>
-                                <div class="list-group list-group-flush">
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{cliente_nome}}">
-                                        <code>{{cliente_nome}}</code>
-                                    </button>
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{cliente_cnpj}}">
-                                        <code>{{cliente_cnpj}}</code>
-                                    </button>
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{cliente_endereco}}">
-                                        <code>{{cliente_endereco}}</code>
-                                    </button>
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{cliente_email}}">
-                                        <code>{{cliente_email}}</code>
-                                    </button>
-                                </div>
-                                
-                                <h6 class="mt-3"><strong>Vendedor</strong></h6>
-                                <div class="list-group list-group-flush">
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{vendedor_nome}}">
-                                        <code>{{vendedor_nome}}</code>
-                                    </button>
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{vendedor_email}}">
-                                        <code>{{vendedor_email}}</code>
-                                    </button>
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{vendedor_telefone}}">
-                                        <code>{{vendedor_telefone}}</code>
-                                    </button>
-                                </div>
-                                
-                                <h6 class="mt-3"><strong>Proposta</strong></h6>
-                                <div class="list-group list-group-flush">
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{proposta_numero}}">
-                                        <code>{{proposta_numero}}</code>
-                                    </button>
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{proposta_data}}">
-                                        <code>{{proposta_data}}</code>
-                                    </button>
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{proposta_validade}}">
-                                        <code>{{proposta_validade}}</code>
-                                    </button>
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{proposta_descricao}}">
-                                        <code>{{proposta_descricao}}</code>
-                                    </button>
-                                </div>
-                                
-                                <h6 class="mt-3"><strong>Valores</strong></h6>
-                                <div class="list-group list-group-flush">
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{valor_total}}">
-                                        <code>{{valor_total}}</code>
-                                    </button>
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{valor_desconto}}">
-                                        <code>{{valor_desconto}}</code>
-                                    </button>
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{valor_final}}">
-                                        <code>{{valor_final}}</code>
-                                    </button>
-                                </div>
-                                
-                                <h6 class="mt-3"><strong>Empresa</strong></h6>
-                                <div class="list-group list-group-flush">
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{empresa_nome}}">
-                                        <code>{{empresa_nome}}</code>
-                                    </button>
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{empresa_cnpj}}">
-                                        <code>{{empresa_cnpj}}</code>
-                                    </button>
-                                    <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="{{empresa_endereco}}">
-                                        <code>{{empresa_endereco}}</code>
-                                    </button>
-                                </div>
-                                
-                                <div class="alert alert-info mt-3 p-2">
-                                    <small>
-                                        <i class="fas fa-info-circle"></i>
-                                        As variáveis serão substituídas automaticamente ao gerar a proposta.
-                                    </small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <script>
-                document.querySelectorAll('.var-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const variable = this.dataset.var;
-                        navigator.clipboard.writeText(variable).then(() => {
-                            this.classList.add('bg-success', 'text-white');
-                            setTimeout(() => {
-                                this.classList.remove('bg-success', 'text-white');
-                            }, 500);
-                        });
-                    });
-                });
-                
-                tinymce.init({
-                    selector: '#conteudo_html',
-                    height: 500,
-                    menubar: true,
-                    plugins: [
-                        'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
-                        'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-                        'insertdatetime', 'media', 'table', 'help', 'wordcount'
-                    ],
-                    toolbar: 'undo redo | blocks | ' +
-                        'bold italic forecolor | alignleft aligncenter ' +
-                        'alignright alignjustify | bullist numlist outdent indent | ' +
-                        'removeformat | table | help',
-                    content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }',
-                    language: 'pt_BR',
-                    setup: function(editor) {
-                        document.querySelectorAll('.var-btn').forEach(btn => {
-                            btn.addEventListener('click', function() {
-                                const variable = this.dataset.var;
-                                editor.insertContent(variable);
-                            });
-                        });
-                    }
-                });
-                </script>
-
-            <?php endif; ?>
-        </div>
-    </section>
+<div class="card shadow-sm">
+  <div class="card-body pb-1">
+    <div class="d-flex justify-content-between align-items-center">
+      <h5 class="fw-bold text-primary mb-0">Modelos de Documentos</h5>
+      <?php if ($action === 'list'): ?>
+        <a href="<?= e('modelos_documentos.php?action=create') ?>" class="btn btn-success btn-sm">
+          <i class="fas fa-plus"></i> Novo Modelo
+        </a>
+      <?php else: ?>
+        <a href="<?= e('modelos_documentos.php') ?>" class="btn btn-secondary btn-sm">
+          <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+      <?php endif; ?>
+    </div>
+  </div>
 </div>
+
+<?php if ($success_msg): ?>
+  <div class="alert alert-success mt-3 alert-dismissible fade show">
+    <?= e($success_msg) ?>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+<?php endif; ?>
+
+<?php if ($error_msg): ?>
+  <div class="alert alert-danger mt-3 alert-dismissible fade show">
+    <?= e($error_msg) ?>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+<?php endif; ?>
+
+<?php if ($action === 'list'): ?>
+  <div class="card mt-3">
+    <div class="card-body">
+      <form class="row g-2 align-items-end mb-3" method="GET">
+        <div class="col-md-6">
+          <label class="form-label">Buscar</label>
+          <input type="text" name="search" value="<?= e($search) ?>" class="form-control" placeholder="Título ou descrição">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Categoria</label>
+          <select name="categoria" class="form-select">
+            <option value="">Todas</option>
+            <?php foreach ($categorias as $cat): ?>
+              <?php $valor = $cat['categoria'] ?? ''; ?>
+              <option value="<?= e($valor) ?>" <?= $valor === $categoria_filter ? 'selected' : '' ?>>
+                <?= e($valor) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="col-md-2 text-end">
+          <button class="btn btn-primary w-100">Filtrar</button>
+        </div>
+      </form>
+
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Título</th>
+              <th>Categoria</th>
+              <th>Atualizado em</th>
+              <th>Ativo</th>
+              <th class="text-end">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php if (!$modelos): ?>
+              <tr>
+                <td colspan="6" class="text-center text-muted">Nenhum modelo cadastrado.</td>
+              </tr>
+            <?php else: foreach ($modelos as $mod): ?>
+              <tr>
+                <td><?= (int)$mod['id'] ?></td>
+                <td><?= e($mod['titulo']) ?></td>
+                <td><?= e($mod['categoria']) ?></td>
+                <td>
+                  <?php
+                    $atualizado = $mod['atualizado_em'] ?? $mod['criado_em'] ?? '';
+                    echo $atualizado ? date('d/m/Y H:i', strtotime((string)$atualizado)) : '-';
+                  ?>
+                </td>
+                <td>
+                  <span class="badge bg-<?= !empty($mod['ativo']) ? 'success' : 'secondary' ?>">
+                    <?= !empty($mod['ativo']) ? 'Sim' : 'Não' ?>
+                  </span>
+                </td>
+                <td class="text-end">
+                  <a href="<?= e('modelos_documentos.php?action=edit&id=' . (int)$mod['id']) ?>" class="btn btn-sm btn-primary">
+                    <i class="fas fa-edit"></i> Editar
+                  </a>
+                  <form method="POST" class="d-inline">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="duplicate">
+                    <input type="hidden" name="id" value="<?= (int)$mod['id'] ?>">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                      <i class="fas fa-copy"></i> Duplicar
+                    </button>
+                  </form>
+                  <form method="POST" class="d-inline" onsubmit="return confirm('Excluir este modelo?');">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="id" value="<?= (int)$mod['id'] ?>">
+                    <button type="submit" class="btn btn-sm btn-danger">
+                      <i class="fas fa-trash"></i> Excluir
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            <?php endforeach; endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+<?php endif; ?>
+
+<?php if ($action === 'create' || $action === 'edit'): ?>
+  <div class="row mt-3">
+    <div class="col-lg-8">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <?= $action === 'create' ? 'Criar Novo Modelo' : 'Editar Modelo' ?>
+          </h5>
+        </div>
+        <div class="card-body">
+          <form method="POST">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="<?= e($action) ?>">
+            <?php if ($action === 'edit'): ?>
+              <input type="hidden" name="id" value="<?= (int)$id ?>">
+            <?php endif; ?>
+
+            <div class="mb-3">
+              <label class="form-label">Título *</label>
+              <input type="text" name="titulo" class="form-control" value="<?= e($modelo['titulo'] ?? '') ?>" required>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Categoria *</label>
+              <input type="text" name="categoria" class="form-control" value="<?= e($modelo['categoria'] ?? '') ?>" required>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Descrição</label>
+              <textarea name="descricao" class="form-control" rows="2"><?= e($modelo['descricao'] ?? '') ?></textarea>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Conteúdo *</label>
+              <textarea name="conteudo_html" id="conteudo_html" class="form-control"><?= e($modelo['conteudo_html'] ?? '') ?></textarea>
+              <small class="text-muted">Use as variáveis ao lado para montar o documento.</small>
+            </div>
+
+            <div class="form-check mb-3">
+              <input type="checkbox" class="form-check-input" id="ativo" name="ativo" <?= !empty($modelo['ativo']) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="ativo">Modelo ativo</label>
+            </div>
+
+            <div class="mt-4">
+              <button type="submit" class="btn btn-success">
+                <i class="fas fa-save me-1"></i> Salvar
+              </button>
+              <a href="<?= e('modelos_documentos.php') ?>" class="btn btn-outline-secondary">
+                Cancelar
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4 mt-3 mt-lg-0">
+      <div class="card card-primary">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Variáveis Disponíveis</h5>
+        </div>
+        <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+          <p class="text-sm text-muted">Clique para inserir no editor:</p>
+
+          <?php
+          $grupos = [
+              'Cliente' => [
+                  '{{cliente_nome}}',
+                  '{{cliente_cnpj}}',
+                  '{{cliente_endereco}}',
+                  '{{cliente_email}}',
+              ],
+              'Proposta' => [
+                  '{{proposta_numero}}',
+                  '{{proposta_data}}',
+                  '{{proposta_validade}}',
+                  '{{proposta_descricao}}',
+                  '{{valor_total}}',
+                  '{{valor_final}}',
+              ],
+              'Empresa' => [
+                  '{{empresa_nome}}',
+                  '{{empresa_cnpj}}',
+                  '{{empresa_endereco}}',
+                  '{{empresa_email}}',
+              ],
+          ];
+          ?>
+
+          <?php foreach ($grupos as $titulo => $vars): ?>
+            <h6 class="mt-3"><strong><?= e($titulo) ?></strong></h6>
+            <div class="list-group list-group-flush">
+              <?php foreach ($vars as $var): ?>
+                <button type="button" class="list-group-item list-group-item-action p-1 var-btn" data-var="<?= e($var) ?>">
+                  <code><?= e($var) ?></code>
+                </button>
+              <?php endforeach; ?>
+            </div>
+          <?php endforeach; ?>
+
+          <div class="alert alert-info mt-3 p-2">
+            <small>
+              <i class="fas fa-info-circle me-1"></i>
+              As variáveis são preenchidas automaticamente ao gerar o documento.
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+  <script>
+    document.querySelectorAll('.var-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const variable = btn.dataset.var;
+        if (window.tinymce?.activeEditor) {
+          window.tinymce.activeEditor.insertContent(variable);
+        } else {
+          const textarea = document.querySelector('#conteudo_html');
+          const start = textarea.selectionStart;
+          const end = textarea.selectionEnd;
+          const value = textarea.value;
+          textarea.value = value.substring(0, start) + variable + value.substring(end);
+        }
+      });
+    });
+
+    tinymce.init({
+      selector: '#conteudo_html',
+      height: 520,
+      language: 'pt_BR',
+      menubar: true,
+      plugins: [
+        'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+        'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+        'insertdatetime', 'media', 'table', 'help', 'wordcount'
+      ],
+      toolbar: 'undo redo | blocks | bold italic forecolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | table | help',
+      content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }'
+    });
+  </script>
+<?php endif; ?>
+
+<?php
+$content = ob_get_clean();
+include __DIR__ . '/../inc/template_base.php';
