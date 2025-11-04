@@ -13,6 +13,7 @@ $editando = $propostaId > 0;
 
 $clientes = run_query('SELECT id, nome_fantasia FROM clientes ORDER BY nome_fantasia ASC');
 $pacotes = run_query('SELECT id, nome FROM pacotes WHERE ativo = 1 ORDER BY nome ASC');
+$modelos = run_query('SELECT id, titulo, categoria FROM modelos_documentos WHERE ativo = TRUE ORDER BY categoria, titulo ASC');
 
 $propostaAtual = null;
 $itensAtuais = [];
@@ -29,6 +30,7 @@ $formData = [
     'id' => $propostaId,
     'id_cliente' => $propostaAtual['id_cliente'] ?? (int)($_GET['cliente_id'] ?? 0),
     'id_pacote' => $propostaAtual['id_pacote'] ?? null,
+    'modelo_id' => $propostaAtual['modelo_id'] ?? null,
     'descricao' => $propostaAtual['descricao'] ?? '',
     'observacoes' => $propostaAtual['observacoes'] ?? '',
     'data_envio' => !empty($propostaAtual['data_envio']) ? date('Y-m-d\TH:i', strtotime($propostaAtual['data_envio'])) : '',
@@ -53,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $formData['id_cliente'] = (int)($_POST['id_cliente'] ?? 0);
     $formData['id_pacote'] = isset($_POST['id_pacote']) && $_POST['id_pacote'] !== '' ? (int)$_POST['id_pacote'] : null;
+    $formData['modelo_id'] = isset($_POST['modelo_id']) && $_POST['modelo_id'] !== '' ? (int)$_POST['modelo_id'] : null;
     $formData['descricao'] = trim($_POST['descricao'] ?? '');
     $formData['observacoes'] = trim($_POST['observacoes'] ?? '');
     $formData['data_envio'] = trim($_POST['data_envio'] ?? '');
@@ -175,6 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $dataToPersist = [
                 $formData['id_cliente'],
                 $formData['id_pacote'],
+                $formData['modelo_id'],
                 current_user()['id'] ?? null,
                 $formData['descricao'],
                 $formData['observacoes'] ?: null,
@@ -189,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($editando) {
                 $stmt = $pdo->prepare(
                     'UPDATE propostas
-                     SET id_cliente = ?, id_pacote = ?, id_usuario = ?, descricao = ?, observacoes = ?, data_envio = ?, validade_dias = ?, status = ?,
+                     SET id_cliente = ?, id_pacote = ?, modelo_id = ?, id_usuario = ?, descricao = ?, observacoes = ?, data_envio = ?, validade_dias = ?, status = ?,
                          total_servicos = ?, total_materiais = ?, total_geral = ?
                      WHERE id = ?'
                 );
@@ -198,8 +202,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('DELETE FROM proposta_itens WHERE id_proposta = ?')->execute([$propostaId]);
             } else {
                 $stmt = $pdo->prepare(
-                    'INSERT INTO propostas (codigo_proposta, id_cliente, id_pacote, id_usuario, descricao, observacoes, data_envio, validade_dias, status, total_servicos, total_materiais, total_geral)
-                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO propostas (codigo_proposta, id_cliente, id_pacote, modelo_id, id_usuario, descricao, observacoes, data_envio, validade_dias, status, total_servicos, total_materiais, total_geral)
+                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute($dataToPersist);
                 $propostaId = (int)$pdo->lastInsertId();
@@ -341,6 +345,27 @@ ob_start();
                 </option>
               <?php endforeach; ?>
             </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Modelo de Documento</label>
+            <select name="modelo_id" class="form-select">
+              <option value="">Sem modelo (PDF padrão)</option>
+              <?php 
+              $currentCategoria = '';
+              foreach ($modelos as $mod): 
+                if ($currentCategoria !== $mod['categoria']):
+                  if ($currentCategoria !== '') echo '</optgroup>';
+                  $currentCategoria = $mod['categoria'];
+                  echo '<optgroup label="' . e($currentCategoria) . '">';
+                endif;
+              ?>
+                <option value="<?= (int)$mod['id'] ?>" <?= (int)($formData['modelo_id'] ?? 0) === (int)$mod['id'] ? 'selected' : '' ?>>
+                  <?= e($mod['titulo']) ?>
+                </option>
+              <?php endforeach; ?>
+              <?php if ($currentCategoria !== '') echo '</optgroup>'; ?>
+            </select>
+            <small class="text-muted">Escolha um modelo para gerar o PDF da proposta</small>
           </div>
           <div class="col-md-12">
             <label class="form-label">Descrição *</label>

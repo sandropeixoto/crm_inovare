@@ -30,7 +30,8 @@ BEGIN
         ('Status de Propostas', '📋', 'auxiliares/status_propostas.php', menu_aux_id, 4, 'admin,gestor', TRUE),
         ('Classificações', '🏷️', 'auxiliares/classificacoes.php', menu_aux_id, 5, 'admin,gestor', TRUE),
         ('Unidades de Medida', '📏', 'auxiliares/unidades_medida.php', menu_aux_id, 6, 'admin,gestor', TRUE),
-        ('Gerenciar Menus', '🎯', 'auxiliares/menus.php', menu_aux_id, 7, 'admin', TRUE)
+        ('Modelos de Documentos', '📝', 'auxiliares/modelos_documentos.php', menu_aux_id, 7, 'admin,gestor', TRUE),
+        ('Gerenciar Menus', '🎯', 'auxiliares/menus.php', menu_aux_id, 8, 'admin', TRUE)
         ON CONFLICT DO NOTHING;
     END IF;
 END $$;

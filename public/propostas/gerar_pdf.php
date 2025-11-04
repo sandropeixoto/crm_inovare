@@ -1,5 +1,10 @@
 <?php
 require_once __DIR__ . '/../../config/db.php';
+require_once __DIR__ . '/../../config/template_engine.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
+
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 ensure_session_security();
 require_role(['admin','gestor','comercial','visualizador']);
@@ -10,8 +15,9 @@ if ($id <= 0) {
 }
 
 $sql = "SELECT p.*, c.nome_fantasia, c.razao_social, c.cnpj, c.email AS email_cliente,
+               c.endereco as cliente_endereco,
                pa.nome AS pacote_nome, pa.descricao AS pacote_desc,
-               u.nome AS usuario_nome
+               u.nome AS usuario_nome, u.email as vendedor_email, u.telefone as vendedor_telefone
         FROM propostas p
         JOIN clientes c ON c.id = p.id_cliente
         LEFT JOIN pacotes pa ON pa.id = p.id_pacote
@@ -26,6 +32,25 @@ $itens = run_query('SELECT * FROM proposta_itens WHERE id_proposta = ? ORDER BY 
 $config = run_query('SELECT * FROM configuracoes WHERE ativo=1 ORDER BY id DESC LIMIT 1')[0] ?? null;
 
 log_user_action(current_user()['id'] ?? null, 'Gerou PDF da proposta', 'propostas', $id, null, $prop);
+
+if (!empty($prop['modelo_id'])) {
+    try {
+        $engine = new TemplateEngine(pdo());
+        $html = $engine->generateFromModel($prop['modelo_id'], $id);
+        
+        $options = new Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('defaultFont', 'DejaVu Sans');
+        $pdf = new Dompdf($options);
+        $pdf->loadHtml($html);
+        $pdf->setPaper('A4', 'portrait');
+        $pdf->render();
+        $pdf->stream('Proposta_' . $prop['id'] . '.pdf', ['Attachment' => false]);
+        exit;
+    } catch (Exception $e) {
+        log_system('error', 'Erro ao gerar PDF com modelo: ' . $e->getMessage(), __FILE__, __LINE__);
+    }
+}
 
 function h(string $value): string
 {
@@ -169,11 +194,6 @@ h1,h2,h3,h4 { color: #0b3d60; margin-bottom: 6px; }
 </html>
 <?php
 $html = ob_get_clean();
-
-require_once __DIR__ . '/../../vendor/autoload.php';
-
-use Dompdf\Dompdf;
-use Dompdf\Options;
 
 $options = new Options();
 $options->set('isRemoteEnabled', true);

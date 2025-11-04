@@ -33,6 +33,16 @@ CRM Inovare is a web application built with PHP 8.2 designed for commercial team
 - **Senha:** `admin123`
 - **Important**: Troque a senha do administrador após o primeiro login
 
+### Sistema de Modelos de Documentos (Novo!)
+- ✅ **CRUD de Modelos**: Interface completa para criar, editar, duplicar e excluir modelos de documentos
+- ✅ **Editor Visual TinyMCE**: Editor WYSIWYG integrado para criação fácil de modelos
+- ✅ **Variáveis Dinâmicas**: Painel lateral com variáveis disponíveis (Cliente, Vendedor, Proposta, Valores, Empresa)
+- ✅ **Motor de Templates**: Sistema que substitui variáveis automaticamente ao gerar PDFs
+- ✅ **Integração com Propostas**: Campo para selecionar modelo ao criar/editar propostas
+- ✅ **Geração de PDF**: PDFs gerados usando o modelo selecionado ou layout padrão como fallback
+- ✅ **Modelos Prontos**: 3 templates profissionais incluídos (Proposta Comercial, Orçamento, Contrato)
+- 📝 **Limitações conhecidas**: Loop de itens e formatadores avançados serão implementados em versão futura
+
 ### Status do Sistema
 - ✅ Banco de dados PostgreSQL configurado e populado
 - ✅ Login funcionando corretamente
@@ -40,6 +50,7 @@ CRM Inovare is a web application built with PHP 8.2 designed for commercial team
 - ✅ Deployment configurado
 - ✅ AdminLTE integrado e funcional
 - ✅ Módulos auxiliares criados e acessíveis via menu
+- ✅ Sistema de modelos de documentos operacional
 
 # User Preferences
 
