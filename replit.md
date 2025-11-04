@@ -6,6 +6,16 @@ CRM Inovare is a web application built with PHP 8.2 designed for commercial team
 
 ## Recent Changes (November 4, 2025)
 
+### Correções de Compatibilidade PostgreSQL (Latest)
+- ✅ **Funções de Data**: Convertidas todas as funções MySQL para PostgreSQL
+  - `DATE_FORMAT()` → `TO_CHAR()` em usuarios/listar.php e relatorios/dashboard_financeiro.php
+  - `CURDATE()` → `CURRENT_DATE` em queries de relatórios
+  - `DATE_SUB()` → operador `-` com `INTERVAL '12 months'`
+- ✅ **Campos Booleanos**: Corrigidas todas as queries de campos booleanos
+  - Mudança de `ativo=1` para `ativo=TRUE` em todos os módulos
+  - Arquivos corrigidos: clientes/listar.php, propostas/listar.php, propostas/editar.php, propostas/gerar_pdf.php, inc/menu.php, configuracoes/editar.php, template_engine.php
+- ✅ **Status**: Todos os módulos principais agora funcionam corretamente (Clientes, Propostas, Relatórios, Usuários)
+
 ### Replit Environment Setup
 - Migrated from MySQL to PostgreSQL for Replit compatibility
 - Updated database connection in `config/db.php` to use PostgreSQL PDO driver
