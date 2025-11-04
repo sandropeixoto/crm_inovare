@@ -130,7 +130,13 @@ CREATE TABLE IF NOT EXISTS propostas (
     codigo_proposta VARCHAR(20) UNIQUE,
     id_cliente INT NOT NULL,
     id_pacote INT,
+    modelo_id INT,
     id_usuario INT,
+    numero_colaboradores INT,
+    sinistralidade_percentual DECIMAL(5,2),
+    franquia_percentual DECIMAL(5,2),
+    valor_implantacao DECIMAL(12,2),
+    valor_mensal DECIMAL(12,2),
     descricao TEXT,
     observacoes TEXT,
     data_envio DATETIME,
@@ -145,6 +151,8 @@ CREATE TABLE IF NOT EXISTS propostas (
       FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE CASCADE,
     CONSTRAINT fk_propostas_pacote
       FOREIGN KEY (id_pacote) REFERENCES pacotes(id) ON DELETE SET NULL,
+    CONSTRAINT fk_propostas_modelo
+      FOREIGN KEY (modelo_id) REFERENCES modelos_documentos(id) ON DELETE SET NULL,
     CONSTRAINT fk_propostas_usuario
       FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;

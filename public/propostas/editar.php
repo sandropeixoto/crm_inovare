@@ -12,7 +12,7 @@ $propostaId = $idFromPost ?: $idFromRequest;
 $editando = $propostaId > 0;
 
 $clientes = run_query('SELECT id, nome_fantasia FROM clientes ORDER BY nome_fantasia ASC');
-$pacotes = run_query('SELECT id, nome FROM pacotes WHERE ativo = TRUE ORDER BY nome ASC');
+$pacotes = run_query('SELECT id, nome, descricao, tipo_calculo, sinistralidade_padrao, franquia_padrao, valor_implantacao_base, valor_mensal_base FROM pacotes WHERE ativo = TRUE ORDER BY nome ASC');
 $modelos = run_query('SELECT id, titulo, categoria FROM modelos_documentos WHERE ativo = TRUE ORDER BY categoria, titulo ASC');
 
 $propostaAtual = null;
@@ -20,7 +20,7 @@ $itensAtuais = [];
 if ($editando) {
     $propostaAtual = run_query('SELECT * FROM propostas WHERE id = ?', [$propostaId])[0] ?? null;
     if (!$propostaAtual) {
-        abort(404, 'Proposta n√£o encontrada.');
+        abort(404, 'Proposta n+˙o encontrada.');
     }
 
     $itensAtuais = run_query('SELECT * FROM proposta_itens WHERE id_proposta = ? ORDER BY id ASC', [$propostaId]);
@@ -31,6 +31,11 @@ $formData = [
     'id_cliente' => $propostaAtual['id_cliente'] ?? (int)($_GET['cliente_id'] ?? 0),
     'id_pacote' => $propostaAtual['id_pacote'] ?? null,
     'modelo_id' => $propostaAtual['modelo_id'] ?? null,
+    'numero_colaboradores' => $propostaAtual['numero_colaboradores'] ?? null,
+    'sinistralidade_percentual' => $propostaAtual['sinistralidade_percentual'] ?? null,
+    'franquia_percentual' => $propostaAtual['franquia_percentual'] ?? null,
+    'valor_implantacao' => $propostaAtual['valor_implantacao'] ?? null,
+    'valor_mensal' => $propostaAtual['valor_mensal'] ?? null,
     'descricao' => $propostaAtual['descricao'] ?? '',
     'observacoes' => $propostaAtual['observacoes'] ?? '',
     'data_envio' => !empty($propostaAtual['data_envio']) ? date('Y-m-d\TH:i', strtotime($propostaAtual['data_envio'])) : '',
@@ -56,31 +61,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formData['id_cliente'] = (int)($_POST['id_cliente'] ?? 0);
     $formData['id_pacote'] = isset($_POST['id_pacote']) && $_POST['id_pacote'] !== '' ? (int)$_POST['id_pacote'] : null;
     $formData['modelo_id'] = isset($_POST['modelo_id']) && $_POST['modelo_id'] !== '' ? (int)$_POST['modelo_id'] : null;
+    $formData['numero_colaboradores'] = $_POST['numero_colaboradores'] === '' ? null : max(0, (int)$_POST['numero_colaboradores']);
+    $formData['sinistralidade_percentual'] = $_POST['sinistralidade_percentual'] === '' ? null : (float)str_replace(',', '.', $_POST['sinistralidade_percentual']);
+    $formData['franquia_percentual'] = $_POST['franquia_percentual'] === '' ? null : (float)str_replace(',', '.', $_POST['franquia_percentual']);
+    $formData['valor_implantacao'] = $_POST['valor_implantacao'] === '' ? null : (float)str_replace(',', '.', $_POST['valor_implantacao']);
+    $formData['valor_mensal'] = $_POST['valor_mensal'] === '' ? null : (float)str_replace(',', '.', $_POST['valor_mensal']);
     $formData['descricao'] = trim($_POST['descricao'] ?? '');
     $formData['observacoes'] = trim($_POST['observacoes'] ?? '');
     $formData['data_envio'] = trim($_POST['data_envio'] ?? '');
     $formData['validade_dias'] = $_POST['validade_dias'] === '' ? '' : (int)$_POST['validade_dias'];
     $formData['status'] = in_array($_POST['status'] ?? '', $allowedStatus, true) ? $_POST['status'] : 'rascunho';
 
-    // Valida√ß√£o b√°sica dos dados gerais
+    // Valida+∫+˙o b+Ìsica dos dados gerais
     if ($formData['id_cliente'] <= 0) {
-        $errors[] = 'Selecione um cliente v√°lido.';
+        $errors[] = 'Selecione um cliente v+Ìlido.';
     } else {
         $clienteExiste = run_query('SELECT id FROM clientes WHERE id = ?', [$formData['id_cliente']]);
         if (!$clienteExiste) {
-            $errors[] = 'O cliente informado n√£o foi encontrado.';
+            $errors[] = 'O cliente informado n+˙o foi encontrado.';
         }
     }
 
     if ($formData['id_pacote']) {
         $pacoteExiste = run_query('SELECT id FROM pacotes WHERE id = ?', [$formData['id_pacote']]);
         if (!$pacoteExiste) {
-            $errors[] = 'O pacote selecionado n√£o √© v√°lido.';
+            $errors[] = 'O pacote selecionado n+˙o +Æ v+Ìlido.';
         }
     }
 
     if ($formData['descricao'] === '') {
-        $errors[] = 'Informe uma descri√ß√£o para a proposta.';
+        $errors[] = 'Informe uma descri+∫+˙o para a proposta.';
     }
 
     $dataEnvioDb = null;
@@ -88,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $parse = str_replace('T', ' ', $formData['data_envio']);
         $timestamp = strtotime($parse);
         if ($timestamp === false) {
-            $errors[] = 'Informe uma data de envio v√°lida.';
+            $errors[] = 'Informe uma data de envio v+Ìlida.';
         } else {
             $dataEnvioDb = date('Y-m-d H:i:s', $timestamp);
         }
@@ -96,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $validadeDias = $formData['validade_dias'] === '' ? null : (int)$formData['validade_dias'];
     if ($validadeDias !== null && $validadeDias < 0) {
-        $errors[] = 'A validade deve ser um n√∫mero positivo de dias.';
+        $errors[] = 'A validade deve ser um n+¶mero positivo de dias.';
     }
 
     if ($formData['status'] === 'aceita') {
@@ -125,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if ($descricaoItem === '') {
-                $errors[] = 'Informe a descri√ß√£o de todos os itens adicionados.';
+                $errors[] = 'Informe a descri+∫+˙o de todos os itens adicionados.';
                 break;
             }
 
@@ -135,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if ($valorUnitario < 0) {
-                $errors[] = 'Itens n√£o podem ter valor unit√°rio negativo.';
+                $errors[] = 'Itens n+˙o podem ter valor unit+Ìrio negativo.';
                 break;
             }
 
@@ -152,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$errors && count($parsedItems) === 0) {
-        $errors[] = 'Adicione pelo menos um item √† proposta.';
+        $errors[] = 'Adicione pelo menos um item +· proposta.';
     }
 
     $itensForm = $parsedItems ?: $itensForm;
@@ -175,10 +185,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
 
+            $numeroColaboradores = $formData['numero_colaboradores'];
+            $sinPercentual = $formData['sinistralidade_percentual'];
+            $franquiaPercentual = $formData['franquia_percentual'];
+            $valorImplantacao = $formData['valor_implantacao'];
+            $valorMensal = $formData['valor_mensal'];
+
+            if ($sinPercentual !== null) {
+                $sinPercentual = round($sinPercentual, 4);
+            }
+            if ($franquiaPercentual !== null) {
+                $franquiaPercentual = round($franquiaPercentual, 4);
+            }
+            if ($valorImplantacao !== null) {
+                $valorImplantacao = round($valorImplantacao, 2);
+            }
+            if ($valorMensal !== null) {
+                $valorMensal = round($valorMensal, 2);
+            }
+
             $dataToPersist = [
                 $formData['id_cliente'],
                 $formData['id_pacote'],
                 $formData['modelo_id'],
+                $numeroColaboradores,
+                $sinPercentual,
+                $franquiaPercentual,
+                $valorImplantacao,
+                $valorMensal,
                 current_user()['id'] ?? null,
                 $formData['descricao'],
                 $formData['observacoes'] ?: null,
@@ -193,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($editando) {
                 $stmt = $pdo->prepare(
                     'UPDATE propostas
-                     SET id_cliente = ?, id_pacote = ?, modelo_id = ?, id_usuario = ?, descricao = ?, observacoes = ?, data_envio = ?, validade_dias = ?, status = ?,
+                     SET id_cliente = ?, id_pacote = ?, modelo_id = ?, numero_colaboradores = ?, sinistralidade_percentual = ?, franquia_percentual = ?, valor_implantacao = ?, valor_mensal = ?, id_usuario = ?, descricao = ?, observacoes = ?, data_envio = ?, validade_dias = ?, status = ?,
                          total_servicos = ?, total_materiais = ?, total_geral = ?
                      WHERE id = ?'
                 );
@@ -202,8 +236,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('DELETE FROM proposta_itens WHERE id_proposta = ?')->execute([$propostaId]);
             } else {
                 $stmt = $pdo->prepare(
-                    'INSERT INTO propostas (codigo_proposta, id_cliente, id_pacote, modelo_id, id_usuario, descricao, observacoes, data_envio, validade_dias, status, total_servicos, total_materiais, total_geral)
-                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO propostas (codigo_proposta, id_cliente, id_pacote, modelo_id, numero_colaboradores, sinistralidade_percentual, franquia_percentual, valor_implantacao, valor_mensal, id_usuario, descricao, observacoes, data_envio, validade_dias, status, total_servicos, total_materiais, total_geral)
+                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute($dataToPersist);
                 $propostaId = (int)$pdo->lastInsertId();
@@ -233,6 +267,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $logDepois = [
                 'id_cliente' => $formData['id_cliente'],
                 'id_pacote' => $formData['id_pacote'],
+                'numero_colaboradores' => $numeroColaboradores,
+                'sinistralidade_percentual' => $sinPercentual,
+                'franquia_percentual' => $franquiaPercentual,
+                'valor_implantacao' => $valorImplantacao,
+                'valor_mensal' => $valorMensal,
                 'descricao' => $formData['descricao'],
                 'status' => $formData['status'],
                 'data_envio' => $dataEnvioDb,
@@ -265,7 +304,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Totais iniciais para exibi√ß√£o
+// Totais iniciais para exibi+∫+˙o
 $totalServicosInicial = 0.0;
 $totalMateriaisInicial = 0.0;
 foreach ($itensForm as $item) {
@@ -283,6 +322,16 @@ $page_title = $editando ? 'Editar Proposta' : 'Nova Proposta';
 $breadcrumb = 'Comercial > Propostas > ' . ($editando ? 'Editar' : 'Nova');
 
 $itemsJson = json_encode($itensForm, JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+
+$pacoteSelecionado = null;
+if (!empty($formData['id_pacote'])) {
+    foreach ($pacotes as $pacoteDados) {
+        if ((int)($pacoteDados['id'] ?? 0) === (int)$formData['id_pacote']) {
+            $pacoteSelecionado = $pacoteDados;
+            break;
+        }
+    }
+}
 
 ob_start();
 ?>
@@ -302,7 +351,7 @@ ob_start();
 
 <?php if ($errors): ?>
   <div class="alert alert-danger">
-    <div class="fw-bold mb-2">N√£o foi poss√≠vel salvar a proposta:</div>
+    <div class="fw-bold mb-2">N+˙o foi poss+°vel salvar a proposta:</div>
     <ul class="mb-0">
       <?php foreach ($errors as $err): ?>
         <li><?= e($err) ?></li>
@@ -349,7 +398,7 @@ ob_start();
           <div class="col-md-6">
             <label class="form-label">Modelo de Documento</label>
             <select name="modelo_id" class="form-select">
-              <option value="">Sem modelo (PDF padr√£o)</option>
+              <option value="">Sem modelo (PDF padr+˙o)</option>
               <?php 
               $currentCategoria = '';
               foreach ($modelos as $mod): 
@@ -367,12 +416,49 @@ ob_start();
             </select>
             <small class="text-muted">Escolha um modelo para gerar o PDF da proposta</small>
           </div>
+          <div class="col-12">
+            <div class="alert alert-secondary small mb-0">
+              <?php if ($pacoteSelecionado): ?>
+                <strong><?= e($pacoteSelecionado['nome'] ?? '') ?></strong>
+                <?php if (!empty($pacoteSelecionado['descricao'])): ?>
+                  <div class="mt-1"><?= nl2br(e((string)($pacoteSelecionado['descricao'] ?? ''))) ?></div>
+                <?php endif; ?>
+              <?php else: ?>
+                <span class="text-muted">Selecione um pacote para registrar os par‚metros.</span>
+              <?php endif; ?>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">N∫ de colaboradores</label>
+            <input type="number" name="numero_colaboradores" min="0" step="1" class="form-control"
+                   value="<?= $formData['numero_colaboradores'] !== null ? e((string)$formData['numero_colaboradores']) : '' ?>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Sinistralidade (%)</label>
+            <input type="number" name="sinistralidade_percentual" min="0" step="0.01" class="form-control"
+                   value="<?= $formData['sinistralidade_percentual'] !== null ? e(number_format((float)$formData['sinistralidade_percentual'], 2, '.', '')) : '' ?>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Franquia (%)</label>
+            <input type="number" name="franquia_percentual" min="0" step="0.01" class="form-control"
+                   value="<?= $formData['franquia_percentual'] !== null ? e(number_format((float)$formData['franquia_percentual'], 2, '.', '')) : '' ?>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">ImplantaÁ„o (R$)</label>
+            <input type="number" name="valor_implantacao" min="0" step="0.01" class="form-control"
+                   value="<?= $formData['valor_implantacao'] !== null ? e(number_format((float)$formData['valor_implantacao'], 2, '.', '')) : '' ?>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Mensalidade (R$)</label>
+            <input type="number" name="valor_mensal" min="0" step="0.01" class="form-control"
+                   value="<?= $formData['valor_mensal'] !== null ? e(number_format((float)$formData['valor_mensal'], 2, '.', '')) : '' ?>">
+          </div>
           <div class="col-md-12">
-            <label class="form-label">Descri√ß√£o *</label>
+            <label class="form-label">Descri+∫+˙o *</label>
             <textarea name="descricao" class="form-control" rows="3" required><?= e($formData['descricao']) ?></textarea>
           </div>
           <div class="col-md-12">
-            <label class="form-label">Observa√ß√µes</label>
+            <label class="form-label">Observa+∫+¡es</label>
             <textarea name="observacoes" class="form-control" rows="3"><?= e($formData['observacoes']) ?></textarea>
           </div>
           <div class="col-md-4">
@@ -388,7 +474,7 @@ ob_start();
           <div class="col-md-4">
             <label class="form-label">Data de envio<?= $formData['status'] === 'aceita' ? ' *' : '' ?></label>
             <input type="datetime-local" name="data_envio" value="<?= e($formData['data_envio']) ?>" class="form-control">
-            <small class="text-muted">Obrigat√≥rio quando o status for "aceita".</small>
+            <small class="text-muted">Obrigat+¶rio quando o status for "aceita".</small>
           </div>
           <div class="col-md-4">
             <label class="form-label">Validade (dias)</label>
@@ -401,7 +487,7 @@ ob_start();
     <div class="row g-3">
       <div class="col-md-4">
         <div class="border rounded p-3 bg-light">
-          <div class="text-muted small">Total em servi√ßos</div>
+          <div class="text-muted small">Total em servi+∫os</div>
           <div class="fs-5 fw-semibold" data-total="servicos">R$ <?= number_format($totalServicosInicial, 2, ',', '.') ?></div>
         </div>
       </div>
@@ -426,7 +512,7 @@ ob_start();
         <div class="d-flex justify-content-between align-items-center mb-3">
           <div>
             <h6 class="fw-bold mb-0">Itens da proposta</h6>
-            <small class="text-muted">Adicione servi√ßos e materiais. O total √© calculado automaticamente.</small>
+            <small class="text-muted">Adicione servi+∫os e materiais. O total +Æ calculado automaticamente.</small>
           </div>
           <button type="button" class="btn btn-success btn-sm" id="add-item">+ Adicionar item</button>
         </div>
@@ -436,9 +522,9 @@ ob_start();
             <thead class="table-light">
               <tr>
                 <th style="width: 12%">Tipo</th>
-                <th>Descri√ß√£o</th>
+                <th>Descri+∫+˙o</th>
                 <th style="width: 12%">Qtd.</th>
-                <th style="width: 16%">Valor unit√°rio (R$)</th>
+                <th style="width: 16%">Valor unit+Ìrio (R$)</th>
                 <th style="width: 16%">Total (R$)</th>
                 <th style="width: 8%" class="text-center">&nbsp;</th>
               </tr>
@@ -448,14 +534,14 @@ ob_start();
         </div>
 
         <div id="items-empty" class="alert alert-info mt-3<?= $itensForm ? ' d-none' : '' ?>">
-          Nenhum item adicionado ainda. Use o bot√£o "Adicionar item" para come√ßar.
+          Nenhum item adicionado ainda. Use o bot+˙o "Adicionar item" para come+∫ar.
         </div>
         <div id="items-error" class="alert alert-danger mt-3 d-none"></div>
 
         <div class="row g-3 mt-3">
           <div class="col-md-4">
             <div class="border rounded p-3 bg-light">
-              <div class="text-muted small">Total em servi√ßos</div>
+              <div class="text-muted small">Total em servi+∫os</div>
               <div class="fs-6 fw-semibold" data-total="servicos">R$ <?= number_format($totalServicosInicial, 2, ',', '.') ?></div>
             </div>
           </div>
@@ -479,7 +565,7 @@ ob_start();
   <div class="d-flex justify-content-between align-items-center mt-4">
     <button type="button" class="btn btn-outline-secondary" id="btn-prev">Anterior</button>
     <div class="ms-auto d-flex gap-2">
-      <button type="button" class="btn btn-primary" id="btn-next">Pr√≥ximo</button>
+      <button type="button" class="btn btn-primary" id="btn-next">Pr+¶ximo</button>
       <button type="submit" class="btn btn-success d-none" id="btn-submit"><?= $editando ? 'Atualizar Proposta' : 'Salvar Proposta' ?></button>
     </div>
   </div>
@@ -589,7 +675,7 @@ document.addEventListener('DOMContentLoaded', function () {
     tr.innerHTML = `
       <td>
         <select class="form-select form-select-sm item-tipo" data-name="tipo_item">
-          <option value="servico" ${item.tipo_item === 'servico' ? 'selected' : ''}>Servi√ßo</option>
+          <option value="servico" ${item.tipo_item === 'servico' ? 'selected' : ''}>Servi+∫o</option>
           <option value="material" ${item.tipo_item === 'material' ? 'selected' : ''}>Material</option>
         </select>
       </td>
@@ -667,7 +753,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!hasValidItem) {
       event.preventDefault();
-      errorAlert.textContent = 'Adicione pelo menos um item v√°lido (com descri√ß√£o e quantidade).';
+      errorAlert.textContent = 'Adicione pelo menos um item v+Ìlido (com descri+∫+˙o e quantidade).';
       errorAlert.classList.remove('d-none');
       showStep(2);
       return;

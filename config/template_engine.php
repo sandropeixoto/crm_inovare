@@ -97,6 +97,12 @@ class TemplateEngine {
             'proposta_validade' => $validade_texto,
             'proposta_descricao' => $proposta['descricao'] ?? '',
             
+            'proposta_colaboradores' => $proposta['numero_colaboradores'] ?? '',
+            'proposta_sinistralidade' => isset($proposta['sinistralidade_percentual']) ? number_format((float)$proposta['sinistralidade_percentual'], 2, ',', '.') . '%' : '',
+            'proposta_franquia' => isset($proposta['franquia_percentual']) ? number_format((float)$proposta['franquia_percentual'], 2, ',', '.') . '%' : '',
+            'proposta_valor_implantacao' => isset($proposta['valor_implantacao']) ? number_format((float)$proposta['valor_implantacao'], 2, ',', '.') : '',
+            'proposta_valor_mensal' => isset($proposta['valor_mensal']) ? number_format((float)$proposta['valor_mensal'], 2, ',', '.') : '',
+
             'valor_total' => number_format((float)($proposta['total_servicos'] ?? 0) + (float)($proposta['total_materiais'] ?? 0), 2, ',', '.'),
             'valor_desconto' => '0,00',
             'valor_final' => number_format((float)($proposta['total_geral'] ?? 0), 2, ',', '.'),

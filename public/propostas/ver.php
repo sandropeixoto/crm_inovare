@@ -46,6 +46,11 @@ $atualizadoEm = !empty($prop['atualizado_em']) ? date('d/m/Y H:i', strtotime((st
 $totalServicos = number_format((float)($prop['total_servicos'] ?? 0), 2, ',', '.');
 $totalMateriais = number_format((float)($prop['total_materiais'] ?? 0), 2, ',', '.');
 $totalGeral = number_format((float)($prop['total_geral'] ?? 0), 2, ',', '.');
+$numeroColaboradores = isset($prop['numero_colaboradores']) && $prop['numero_colaboradores'] !== null ? (int)$prop['numero_colaboradores'] : null;
+$sinistralidadeTexto = isset($prop['sinistralidade_percentual']) ? number_format((float)$prop['sinistralidade_percentual'], 2, ',', '.') . '%' : '-';
+$franquiaTexto = isset($prop['franquia_percentual']) ? number_format((float)$prop['franquia_percentual'], 2, ',', '.') . '%' : '-';
+$valorImplantacaoTexto = isset($prop['valor_implantacao']) ? 'R$ ' . number_format((float)$prop['valor_implantacao'], 2, ',', '.') : '-';
+$valorMensalTexto = isset($prop['valor_mensal']) ? 'R$ ' . number_format((float)$prop['valor_mensal'], 2, ',', '.') : '-';
 $descricao = trim((string)($prop['descricao'] ?? ''));
 $observacoes = trim((string)($prop['observacoes'] ?? ''));
 
@@ -119,6 +124,21 @@ body { background-color: #f8f9fa; }
               <p class="mb-0"><?= nl2br(h((string)$prop['pacote_desc'])) ?></p>
             </div>
           <?php endif; ?>
+          <hr>
+          <div class="row g-3 small">
+            <div class="col-md-3">
+              <strong>Nº de colaboradores:</strong><br><?= $numeroColaboradores !== null ? h((string)$numeroColaboradores) : '-' ?>
+            </div>
+            <div class="col-md-3">
+              <strong>Sinistralidade:</strong><br><?= h($sinistralidadeTexto) ?>
+            </div>
+            <div class="col-md-3">
+              <strong>Franquia:</strong><br><?= h($franquiaTexto) ?>
+            </div>
+            <div class="col-md-3">
+              <strong>Valores base:</strong><br><?= h($valorImplantacaoTexto) ?> / <?= h($valorMensalTexto) ?>
+            </div>
+          </div>
         </div>
       </div>
     </div>
