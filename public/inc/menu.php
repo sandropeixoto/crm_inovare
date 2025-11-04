@@ -4,7 +4,7 @@ if (!function_exists('h')) {
 }
 
 // Buscar configuraÃ§Ã£o ativa
-$config = run_query("SELECT empresa_nome, logotipo_url FROM configuracoes WHERE ativo=1 ORDER BY id DESC LIMIT 1")[0] ?? [
+$config = run_query("SELECT empresa_nome, logotipo_url FROM configuracoes WHERE ativo=TRUE ORDER BY id DESC LIMIT 1")[0] ?? [
   'empresa_nome' => 'CRM Inovare',
   'logotipo_url' => ''
 ];

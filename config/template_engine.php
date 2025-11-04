@@ -76,7 +76,7 @@ class TemplateEngine {
             return null;
         }
         
-        $sql_config = "SELECT * FROM configuracoes WHERE ativo=1 ORDER BY id DESC LIMIT 1";
+        $sql_config = "SELECT * FROM configuracoes WHERE ativo=TRUE ORDER BY id DESC LIMIT 1";
         $config = run_query($sql_config, [], true);
         
         $validade_dias = $proposta['validade_dias'] ?? 30;

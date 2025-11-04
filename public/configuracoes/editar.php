@@ -11,7 +11,7 @@ $upload_dir = __DIR__ . '/../imagens/';
 $upload_url = '/inovare/public/imagens/';
 
 // Busca configuração ativa
-$config = run_query("SELECT * FROM configuracoes WHERE ativo=1 LIMIT 1")[0] ?? [
+$config = run_query("SELECT * FROM configuracoes WHERE ativo=TRUE LIMIT 1")[0] ?? [
   'empresa_nome' => '',
   'logotipo_url' => '',
   'endereco' => '',
