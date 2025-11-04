@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'email' => $user[0]['email'],
         'perfil' => $user[0]['perfil']
       ];
-      run_query("UPDATE usuarios SET ultimo_login=NOW() WHERE id=?", [$user[0]['id']]);
+      run_query("UPDATE usuarios SET ultimo_login=CURRENT_TIMESTAMP WHERE id=?", [$user[0]['id']]);
       redirect(app_url('index.php'));
     } else {
       $erro = "Usuário ou senha inválidos.";

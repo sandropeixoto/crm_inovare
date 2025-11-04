@@ -17,16 +17,16 @@ CRM Inovare e uma aplicacao web em PHP 8.1 voltada para equipes comerciais da In
 - **Auditoria e monitoramento** - Logs de sistema (sistema_logs) e de usuario (logs_usuarios) registram IP, user agent e payload de alteracoes.
 
 ## Requisitos
-- PHP 8.1 ou superior com extensoes pdo_mysql, openssl e mbstring habilitadas.
-- MySQL 8+ (ou MariaDB equivalente) utilizando o schema crm_inovare.
+- PHP 8.1 ou superior com extensoes pdo_sqlite, openssl e mbstring habilitadas.
+- SQLite 3 (o arquivo do banco é criado automaticamente em `storage/crm_inovare.sqlite`). Opcionalmente é possível usar PostgreSQL definindo `CRM_DB_DRIVER=pgsql`.
 - Composer para instalar dependencias (Dompdf).
 - Servidor HTTP apontando para o diretorio public/ (Apache, Nginx ou php -S).
 
 ## Como configurar
 1. **Clonar o repositorio** e entrar na pasta do projeto.
 2. **Instalar dependencias**: composer install (gera vendor/ com Dompdf).
-3. **Configurar variaveis**: copie .env.example para .env e ajuste as chaves CRM_DB_*. O bootstrap em config/db.php carrega esse arquivo automaticamente.
-4. **Criar o banco**: importe config/crm_inovare.sql. O script cria tabelas, menus, configuracao institucional, pacotes base e atualiza a senha de admin@inovare.com.
+3. **Configurar variaveis**: copie .env.example para .env e confirme (ou ajuste) `CRM_DB_SQLITE_PATH`. O bootstrap em config/db.php carrega esse arquivo automaticamente.
+4. **Criar o banco**: não é necessário executar scripts manualmente. No primeiro acesso o arquivo SQLite é criado em `storage/` já com tabelas, menus, pacotes base e usuário administrador.
 5. **Ajustar caminho base (opcional)**: se o sistema estiver fora de /inovare/public, ajuste APP_BASE_PATH em config/db.php ou adapte template_base.php.
 6. **Subir o servidor**: php -S localhost:8000 -t public ou configure seu virtual host preferido.
 7. **Acessar**: abra http://localhost:8000/login.php e autentique-se. Troque a senha do administrador logo apos a importacao do schema.
@@ -46,7 +46,7 @@ vendor/               Dependencias instaladas via Composer (nao versionadas)
 ```
 
 ## Banco de dados e logs
-O schema cobre clientes, contatos, pacotes, servicos, propostas, interacoes (com tabela auxiliar para tipos), configuracoes institucionais e os dois canais de auditoria. As funcoes run_query, log_user_action e log_system centralizam a persistencia, garantem padrao unico de log e exibem mensagens amigaveis em caso de falha.
+O schema definido em `config/schema_sqlite.sql` cobre clientes, contatos, pacotes, servicos, propostas, interacoes (com tabela auxiliar para tipos), configuracoes institucionais e os dois canais de auditoria. As funcoes run_query, log_user_action e log_system centralizam a persistencia, garantem padrao unico de log e exibem mensagens amigaveis em caso de falha. Seeds padrão (menus, pacotes, usuário admin e modelos de documentos) são aplicados automaticamente na primeira execução.
 
 ## Controles de seguranca
 Todas as rotas protegidas chamam ensure_session_security() e require_role(). Formularios utilizam csrf_field() e validate_csrf_token(). Em producao recomenda-se HTTPS, rotacao de senhas administrativas e ajuste do timeout de sessao conforme politica interna.

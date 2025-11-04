@@ -107,6 +107,8 @@ load_env_file($rootPath . '/.env');
 /**
  * Configuração — ajuste para o seu ambiente
  */
+define('DB_DRIVER', strtolower((string)env('CRM_DB_DRIVER', 'sqlite')));
+define('SQLITE_DB_PATH', env('CRM_DB_SQLITE_PATH', $rootPath . '/storage/crm_inovare.sqlite'));
 define('DB_HOST', env('PGHOST', env('CRM_DB_HOST', 'localhost')));
 define('DB_NAME', env('PGDATABASE', env('CRM_DB_NAME', 'crm_inovare')));
 define('DB_USER', env('PGUSER', env('CRM_DB_USER', 'root')));
@@ -117,6 +119,18 @@ function pdo(): PDO
 {
     static $pdo = null;
     if ($pdo instanceof PDO) {
+        return $pdo;
+    }
+
+    $driver = DB_DRIVER;
+    if ($driver === 'sqlite') {
+        try {
+            $pdo = create_sqlite_connection(SQLITE_DB_PATH);
+        } catch (Throwable $e) {
+            error_log('[CRM-Inovare] Falha ao inicializar SQLite: ' . $e->getMessage());
+            http_response_code(500);
+            exit('Erro interno ao inicializar o banco de dados.');
+        }
         return $pdo;
     }
 
@@ -136,6 +150,268 @@ function pdo(): PDO
     }
 
     return $pdo;
+}
+
+function create_sqlite_connection(string $dbPath): PDO
+{
+    $pdo = bootstrap_sqlite_database($dbPath);
+    $pdo->exec('PRAGMA busy_timeout = 5000');
+    return $pdo;
+}
+
+function bootstrap_sqlite_database(string $dbPath): PDO
+{
+    $directory = dirname($dbPath);
+    if (!is_dir($directory)) {
+        if (!mkdir($directory, 0775, true) && !is_dir($directory)) {
+            throw new RuntimeException('Não foi possível criar o diretório do banco de dados: ' . $directory);
+        }
+    }
+
+    $options = [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES   => false,
+    ];
+
+    $pdo = new PDO('sqlite:' . $dbPath, null, null, $options);
+    $pdo->exec('PRAGMA foreign_keys = ON');
+    $pdo->exec('PRAGMA journal_mode = WAL');
+
+    $stmt = $pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='usuarios'");
+    $needsBootstrap = !$stmt || (int)$stmt->fetchColumn() === 0;
+
+    if ($needsBootstrap) {
+        $pdo->beginTransaction();
+        try {
+            execute_sql_file($pdo, __DIR__ . '/schema_sqlite.sql');
+            seed_sqlite_defaults($pdo);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    return $pdo;
+}
+
+function execute_sql_file(PDO $pdo, string $filePath): void
+{
+    if (!is_readable($filePath)) {
+        throw new RuntimeException('Arquivo SQL não encontrado: ' . $filePath);
+    }
+
+    $sql = file_get_contents($filePath);
+    if ($sql === false) {
+        throw new RuntimeException('Falha ao ler arquivo SQL: ' . $filePath);
+    }
+
+    foreach (split_sql_statements($sql) as $statement) {
+        if ($statement !== '') {
+            $pdo->exec($statement);
+        }
+    }
+}
+
+function split_sql_statements(string $sql): array
+{
+    $statements = [];
+    $buffer = '';
+    $inString = false;
+    $stringDelimiter = '';
+    $length = strlen($sql);
+
+    for ($i = 0; $i < $length; $i++) {
+        $char = $sql[$i];
+        $next = $sql[$i + 1] ?? '';
+
+        if (!$inString && $char === '-' && $next === '-') {
+            while ($i < $length && $sql[$i] !== "\n") {
+                $i++;
+            }
+            continue;
+        }
+
+        if (!$inString && $char === '/' && $next === '*') {
+            $i += 2;
+            while ($i < $length && !($sql[$i] === '*' && ($sql[$i + 1] ?? '') === '/')) {
+                $i++;
+            }
+            $i++;
+            continue;
+        }
+
+        if ($char === "'" || $char === '"') {
+            if ($inString && $char === $stringDelimiter) {
+                if (($sql[$i + 1] ?? '') === $stringDelimiter) {
+                    $buffer .= $char . $stringDelimiter;
+                    $i++;
+                    continue;
+                }
+                $inString = false;
+                $stringDelimiter = '';
+            } elseif (!$inString) {
+                $inString = true;
+                $stringDelimiter = $char;
+            }
+        }
+
+        if (!$inString && $char === ';') {
+            $trimmed = trim($buffer);
+            if ($trimmed !== '') {
+                $statements[] = $trimmed;
+            }
+            $buffer = '';
+            continue;
+        }
+
+        $buffer .= $char;
+    }
+
+    $trimmed = trim($buffer);
+    if ($trimmed !== '') {
+        $statements[] = $trimmed;
+    }
+
+    return $statements;
+}
+
+function seed_sqlite_defaults(PDO $pdo): void
+{
+    $countStmt = $pdo->query('SELECT COUNT(*) FROM usuarios');
+    if (!$countStmt || (int)$countStmt->fetchColumn() === 0) {
+        $stmt = $pdo->prepare('INSERT INTO usuarios (nome, email, senha_hash, perfil, telefone, ativo) VALUES (?,?,?,?,?,?)');
+        $stmt->execute([
+            'Administrador',
+            'admin@inovare.com',
+            '$2y$10$VoCGUrN4mBVFUkFqEqhKp.sn.0Py.cydZzxH8ZbI4hrKmqf5aj5p2',
+            'admin',
+            null,
+            1,
+        ]);
+    }
+
+    $countStmt = $pdo->query('SELECT COUNT(*) FROM pacotes');
+    if (!$countStmt || (int)$countStmt->fetchColumn() === 0) {
+        $stmt = $pdo->prepare(
+            'INSERT INTO pacotes (nome, descricao, conformidade, tipo_calculo, sinistralidade_padrao, franquia_padrao, valor_implantacao_base, valor_mensal_base, ativo)
+             VALUES (?,?,?,?,?,?,?,?,?)'
+        );
+
+        $defaults = [
+            [
+                'Pacote 1',
+                'Pesquisa + Mapeamento Psicossocial + Relatório Técnico (NR-01) + Educação em Saúde',
+                'Atende à NR-01 – Conformidade legal',
+                'fixo',
+                10.0,
+                10.0,
+                9100.00,
+                0.00,
+                1,
+            ],
+            [
+                'Pacote 2',
+                'Tudo do Pacote 1 + Atendimento Médico e Psicológico 24h (sinistralidade de 10%)',
+                'NR-01 + Cuidado integral – assistência em saúde',
+                'sinistralidade',
+                10.0,
+                10.0,
+                4200.00,
+                1775.00,
+                1,
+            ],
+            [
+                'Pacote 3',
+                'Tudo do Pacote 2 + Consultas mensais com psicólogo e psiquiatra (franquia 10%)',
+                'NR-01 + Cuidado integral + gestão emocional avançada',
+                'franquia',
+                10.0,
+                10.0,
+                4200.00,
+                2570.00,
+                1,
+            ],
+        ];
+
+        foreach ($defaults as $row) {
+            $stmt->execute($row);
+        }
+    }
+
+    $countStmt = $pdo->query('SELECT COUNT(*) FROM configuracoes');
+    if (!$countStmt || (int)$countStmt->fetchColumn() === 0) {
+        $stmt = $pdo->prepare(
+            'INSERT INTO configuracoes (empresa_nome, logotipo_url, endereco, email_contato, telefone, instagram, rodape, ativo)
+             VALUES (?,?,?,?,?,?,?,1)'
+        );
+        $stmt->execute([
+            'Inovare Soluções em Saúde',
+            'https://inovaress.com/imagens/logo-inovare.png',
+            'Tv. Humaitá, 1733 – 1º andar, Sala 02 – Pedreira – Belém/PA',
+            'diretoria@inovaress.com',
+            '(91) 98127-6875 / (91) 98425-7770',
+            '@inovaresolucoesemsaude',
+            '© Inovare Soluções em Saúde – Todos os direitos reservados.',
+        ]);
+    }
+
+    $countStmt = $pdo->query('SELECT COUNT(*) FROM interacoes_tipos');
+    if (!$countStmt || (int)$countStmt->fetchColumn() === 0) {
+        $stmt = $pdo->prepare('INSERT INTO interacoes_tipos (tipo_interacao) VALUES (?)');
+        foreach (['Ligação', 'E-mail', 'Reunião', 'Visita presencial', 'Mensagem instantânea'] as $tipo) {
+            $stmt->execute([$tipo]);
+        }
+    }
+
+    $countStmt = $pdo->query('SELECT COUNT(*) FROM menus');
+    if (!$countStmt || (int)$countStmt->fetchColumn() === 0) {
+        $stmt = $pdo->prepare(
+            'INSERT INTO menus (titulo, icone, link, parent_id, ordem, perfis_permitidos, ativo)
+             VALUES (?,?,?,?,?,?,?)'
+        );
+
+        $mainMenus = [
+            ['Dashboard', '📊', 'index.php', null, 1, 'admin,gestor,comercial,visualizador', 1],
+            ['Clientes', '👥', 'clientes/listar.php', null, 2, 'admin,gestor,comercial', 1],
+            ['Propostas', '🧾', 'propostas/listar.php', null, 3, 'admin,gestor,comercial', 1],
+            ['Relatórios', '📈', 'relatorios/dashboard_financeiro.php', null, 4, 'admin,gestor', 1],
+            ['Usuários', '👤', 'usuarios/listar.php', null, 5, 'admin,gestor', 1],
+            ['Configurações', '⚙️', 'configuracoes/editar.php', null, 6, 'admin', 1],
+            ['Módulos Auxiliares', '🧰', '#', null, 7, 'admin,gestor', 1],
+        ];
+
+        foreach ($mainMenus as $menu) {
+            $stmt->execute($menu);
+        }
+
+        $menuAuxId = (int)$pdo->query("SELECT id FROM menus WHERE titulo = 'Módulos Auxiliares' LIMIT 1")->fetchColumn();
+        if ($menuAuxId > 0) {
+            $auxMenus = [
+                ['Pacotes', '📦', 'auxiliares/pacotes/listar.php', $menuAuxId, 1, 'admin,gestor', 1],
+                ['Serviços de Pacotes', '🛠️', 'auxiliares/pacotes_servicos/listar.php', $menuAuxId, 2, 'admin,gestor', 1],
+                ['Tipos de Interação', '💬', 'auxiliares/tipos_interacao.php', $menuAuxId, 3, 'admin,gestor', 1],
+                ['Status de Propostas', '📌', 'auxiliares/status_proposta.php', $menuAuxId, 4, 'admin,gestor', 1],
+                ['Classificações', '🏷️', 'auxiliares/classificacoes.php', $menuAuxId, 5, 'admin,gestor', 1],
+                ['Unidades de Medida', '📏', 'auxiliares/unidades_medida.php', $menuAuxId, 6, 'admin,gestor', 1],
+                ['Modelos de Documentos', '📝', 'auxiliares/modelos_documentos.php', $menuAuxId, 7, 'admin,gestor', 1],
+                ['Gerenciar Menus', '🧭', 'auxiliares/menus.php', $menuAuxId, 8, 'admin', 1],
+            ];
+
+            foreach ($auxMenus as $menu) {
+                $stmt->execute($menu);
+            }
+        }
+    }
+
+    $countStmt = $pdo->query('SELECT COUNT(*) FROM modelos_documentos');
+    if (!$countStmt || (int)$countStmt->fetchColumn() === 0) {
+        $seedFile = __DIR__ . '/seed_modelos_documentos.sql';
+        if (is_readable($seedFile)) {
+            execute_sql_file($pdo, $seedFile);
+        }
+    }
 }
 
 function client_ip(): string

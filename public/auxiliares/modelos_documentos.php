@@ -107,9 +107,11 @@ if ($action === 'list') {
     $params = [];
     
     if ($search) {
-        $sql .= " AND (titulo ILIKE ? OR descricao ILIKE ?)";
-        $params[] = "%$search%";
-        $params[] = "%$search%";
+        $busca = function_exists('mb_strtolower') ? mb_strtolower($search, 'UTF-8') : strtolower($search);
+        $like = '%' . $busca . '%';
+        $sql .= " AND (LOWER(titulo) LIKE ? OR LOWER(descricao) LIKE ?)";
+        $params[] = $like;
+        $params[] = $like;
     }
     
     if ($categoria_filter) {

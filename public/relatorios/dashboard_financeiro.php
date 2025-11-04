@@ -42,11 +42,11 @@ $cores = [
    GRÁFICO TEMPORAL
 ========================== */
 $dados_mensais = run_query("
-    SELECT TO_CHAR(criado_em, 'YYYY-MM') AS mes,
+    SELECT strftime('%Y-%m', criado_em) AS mes,
            COUNT(*) AS total,
            SUM(total_geral) AS soma
     FROM propostas
-    WHERE criado_em >= CURRENT_DATE - INTERVAL '12 months'
+    WHERE DATE(criado_em) >= DATE('now', '-12 months')
     GROUP BY mes
     ORDER BY mes ASC
 ");

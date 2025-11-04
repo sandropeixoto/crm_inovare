@@ -130,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($camposParaAtualizar) {
                 $valoresAtualizar[] = $id;
                 $stmtCliente = $pdo->prepare(
-                    'UPDATE clientes SET ' . implode(', ', $camposParaAtualizar) . ', atualizado_em = NOW() WHERE id = ?'
+                    'UPDATE clientes SET ' . implode(', ', $camposParaAtualizar) . ', atualizado_em = CURRENT_TIMESTAMP WHERE id = ?'
                 );
                 $stmtCliente->execute($valoresAtualizar);
             }

@@ -6,7 +6,7 @@ require_role(['admin','gestor']);
 $page_title = "Usuários";
 $breadcrumb = "Administração > Usuários";
 
-$usuarios = run_query("SELECT id, nome, email, perfil, ativo, TO_CHAR(ultimo_login, 'DD/MM/YYYY HH24:MI') AS ultimo_login FROM usuarios ORDER BY nome");
+$usuarios = run_query("SELECT id, nome, email, perfil, ativo, strftime('%d/%m/%Y %H:%M', ultimo_login) AS ultimo_login FROM usuarios ORDER BY nome");
 
 ob_start();
 ?>
