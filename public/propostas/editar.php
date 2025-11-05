@@ -20,7 +20,7 @@ $itensAtuais = [];
 if ($editando) {
     $propostaAtual = run_query('SELECT * FROM propostas WHERE id = ?', [$propostaId])[0] ?? null;
     if (!$propostaAtual) {
-        abort(404, 'Proposta n+úo encontrada.');
+        abort(404, 'Proposta nao encontrada.');
     }
 
     $itensAtuais = run_query('SELECT * FROM proposta_itens WHERE id_proposta = ? ORDER BY id ASC', [$propostaId]);
@@ -72,25 +72,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formData['validade_dias'] = $_POST['validade_dias'] === '' ? '' : (int)$_POST['validade_dias'];
     $formData['status'] = in_array($_POST['status'] ?? '', $allowedStatus, true) ? $_POST['status'] : 'rascunho';
 
-    // Valida+º+úo b+ísica dos dados gerais
+    // Validacao basica dos dados gerais
     if ($formData['id_cliente'] <= 0) {
-        $errors[] = 'Selecione um cliente v+ílido.';
+        $errors[] = 'Selecione um cliente valido.';
     } else {
         $clienteExiste = run_query('SELECT id FROM clientes WHERE id = ?', [$formData['id_cliente']]);
         if (!$clienteExiste) {
-            $errors[] = 'O cliente informado n+úo foi encontrado.';
+            $errors[] = 'O cliente informado nao foi encontrado.';
         }
     }
 
     if ($formData['id_pacote']) {
         $pacoteExiste = run_query('SELECT id FROM pacotes WHERE id = ?', [$formData['id_pacote']]);
         if (!$pacoteExiste) {
-            $errors[] = 'O pacote selecionado n+úo +® v+ílido.';
+            $errors[] = 'O pacote selecionado nao e valido.';
         }
     }
 
     if ($formData['descricao'] === '') {
-        $errors[] = 'Informe uma descri+º+úo para a proposta.';
+        $errors[] = 'Informe uma descricao para a proposta.';
     }
 
     $dataEnvioDb = null;
@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $parse = str_replace('T', ' ', $formData['data_envio']);
         $timestamp = strtotime($parse);
         if ($timestamp === false) {
-            $errors[] = 'Informe uma data de envio v+ílida.';
+            $errors[] = 'Informe uma data de envio valida.';
         } else {
             $dataEnvioDb = date('Y-m-d H:i:s', $timestamp);
         }
@@ -106,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $validadeDias = $formData['validade_dias'] === '' ? null : (int)$formData['validade_dias'];
     if ($validadeDias !== null && $validadeDias < 0) {
-        $errors[] = 'A validade deve ser um n+¦mero positivo de dias.';
+        $errors[] = 'A validade deve ser um numero positivo de dias.';
     }
 
     if ($formData['status'] === 'aceita') {
@@ -135,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if ($descricaoItem === '') {
-                $errors[] = 'Informe a descri+º+úo de todos os itens adicionados.';
+                $errors[] = 'Informe a descricao de todos os itens adicionados.';
                 break;
             }
 
@@ -145,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if ($valorUnitario < 0) {
-                $errors[] = 'Itens n+úo podem ter valor unit+írio negativo.';
+                $errors[] = 'Itens nao podem ter valor unitario negativo.';
                 break;
             }
 
@@ -162,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$errors && count($parsedItems) === 0) {
-        $errors[] = 'Adicione pelo menos um item +á proposta.';
+        $errors[] = 'Adicione pelo menos um item a proposta.';
     }
 
     $itensForm = $parsedItems ?: $itensForm;
@@ -304,7 +304,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Totais iniciais para exibi+º+úo
+// Totais iniciais para exibicao
 $totalServicosInicial = 0.0;
 $totalMateriaisInicial = 0.0;
 foreach ($itensForm as $item) {
@@ -363,7 +363,7 @@ ob_start();
 
 <?php if ($errors): ?>
   <div class="alert alert-danger">
-    <div class="fw-bold mb-2">N+úo foi poss+¡vel salvar a proposta:</div>
+    <div class="fw-bold mb-2">Nao foi possivel salvar a proposta:</div>
     <ul class="mb-0">
       <?php foreach ($errors as $err): ?>
         <li><?= e($err) ?></li>
@@ -410,7 +410,7 @@ ob_start();
           <div class="col-md-6">
             <label class="form-label">Modelo de Documento</label>
             <select name="modelo_id" class="form-select">
-              <option value="">Sem modelo (PDF padr+úo)</option>
+              <option value="">Sem modelo (PDF padrao)</option>
               <?php 
               $currentCategoria = '';
               foreach ($modelos as $mod): 
@@ -429,19 +429,24 @@ ob_start();
             <small class="text-muted">Escolha um modelo para gerar o PDF da proposta</small>
           </div>
           <div class="col-12">
-            <div class="alert alert-secondary small mb-0">
-              <?php if ($pacoteSelecionado): ?>
-                <strong><?= e($pacoteSelecionado['nome'] ?? '') ?></strong>
-                <?php if (!empty($pacoteSelecionado['descricao'])): ?>
-                  <div class="mt-1"><?= nl2br(e((string)($pacoteSelecionado['descricao'] ?? ''))) ?></div>
+            <div id="pacote-info" class="alert alert-info small text-dark mb-0">
+              <div id="pacote-info-title" class="fw-semibold"><?= e($pacoteSelecionado['nome'] ?? 'Nenhum pacote selecionado') ?></div>
+              <div id="pacote-info-body" class="mt-1">
+                <?php if ($pacoteSelecionado): ?>
+                  <?php if (!empty($pacoteSelecionado['descricao'])): ?>
+                    <div><?= nl2br(e((string)($pacoteSelecionado['descricao'] ?? ''))) ?></div>
+                  <?php endif; ?>
+                  <?php if (!empty($pacoteSelecionado['conformidade'])): ?>
+                    <div class="mt-1"><small class="text-muted">Conformidade:</small> <?= nl2br(e((string)($pacoteSelecionado['conformidade'] ?? ''))) ?></div>
+                  <?php endif; ?>
+                <?php else: ?>
+                  <div>Selecione um pacote para visualizar os parametros.</div>
                 <?php endif; ?>
-              <?php else: ?>
-                <span class="text-muted">Selecione um pacote para registrar os parâmetros.</span>
-              <?php endif; ?>
+              </div>
             </div>
           </div>
           <div class="col-md-3">
-            <label class="form-label">Nº de colaboradores</label>
+            <label class="form-label">Numero de colaboradores</label>
             <input type="number" name="numero_colaboradores" min="0" step="1" class="form-control"
                    value="<?= $formData['numero_colaboradores'] !== null ? e((string)$formData['numero_colaboradores']) : '' ?>">
           </div>
@@ -456,7 +461,7 @@ ob_start();
                    value="<?= $formData['franquia_percentual'] !== null ? e(number_format((float)$formData['franquia_percentual'], 2, '.', '')) : '' ?>">
           </div>
           <div class="col-md-3">
-            <label class="form-label">Implantação (R$)</label>
+            <label class="form-label">Implantacao (R$)</label>
             <input type="number" name="valor_implantacao" min="0" step="0.01" class="form-control"
                    value="<?= $formData['valor_implantacao'] !== null ? e(number_format((float)$formData['valor_implantacao'], 2, '.', '')) : '' ?>">
           </div>
@@ -466,11 +471,11 @@ ob_start();
                    value="<?= $formData['valor_mensal'] !== null ? e(number_format((float)$formData['valor_mensal'], 2, '.', '')) : '' ?>">
           </div>
           <div class="col-md-12">
-            <label class="form-label">Descri+º+úo *</label>
+            <label class="form-label">Descricao *</label>
             <textarea name="descricao" class="form-control" rows="3" required><?= e($formData['descricao']) ?></textarea>
           </div>
           <div class="col-md-12">
-            <label class="form-label">Observa+º+Áes</label>
+            <label class="form-label">Observacoes</label>
             <textarea name="observacoes" class="form-control" rows="3"><?= e($formData['observacoes']) ?></textarea>
           </div>
           <div class="col-md-4">
@@ -486,7 +491,7 @@ ob_start();
           <div class="col-md-4">
             <label class="form-label">Data de envio<?= $formData['status'] === 'aceita' ? ' *' : '' ?></label>
             <input type="datetime-local" name="data_envio" value="<?= e($formData['data_envio']) ?>" class="form-control">
-            <small class="text-muted">Obrigat+¦rio quando o status for "aceita".</small>
+            <small class="text-muted">Obrigatorio quando o status for "aceita".</small>
           </div>
           <div class="col-md-4">
             <label class="form-label">Validade (dias)</label>
@@ -499,7 +504,7 @@ ob_start();
     <div class="row g-3">
       <div class="col-md-4">
         <div class="border rounded p-3 bg-light">
-          <div class="text-muted small">Total em servi+ºos</div>
+          <div class="text-muted small">Total em servicos</div>
           <div class="fs-5 fw-semibold" data-total="servicos">R$ <?= number_format($totalServicosInicial, 2, ',', '.') ?></div>
         </div>
       </div>
@@ -524,7 +529,7 @@ ob_start();
         <div class="d-flex justify-content-between align-items-center mb-3">
           <div>
             <h6 class="fw-bold mb-0">Itens da proposta</h6>
-            <small class="text-muted">Adicione servi+ºos e materiais. O total +® calculado automaticamente.</small>
+            <small class="text-muted">Adicione servicos e materiais. O total e calculado automaticamente.</small>
           </div>
           <button type="button" class="btn btn-success btn-sm" id="add-item">+ Adicionar item</button>
         </div>
@@ -534,9 +539,9 @@ ob_start();
             <thead class="table-light">
               <tr>
                 <th style="width: 12%">Tipo</th>
-                <th>Descri+º+úo</th>
+                <th>Descricao</th>
                 <th style="width: 12%">Qtd.</th>
-                <th style="width: 16%">Valor unit+írio (R$)</th>
+                <th style="width: 16%">Valor unitario (R$)</th>
                 <th style="width: 16%">Total (R$)</th>
                 <th style="width: 8%" class="text-center">&nbsp;</th>
               </tr>
@@ -546,14 +551,14 @@ ob_start();
         </div>
 
         <div id="items-empty" class="alert alert-info mt-3<?= $itensForm ? ' d-none' : '' ?>">
-          Nenhum item adicionado ainda. Use o bot+úo "Adicionar item" para come+ºar.
+          Nenhum item adicionado ainda. Use o botao "Adicionar item" para comecar.
         </div>
         <div id="items-error" class="alert alert-danger mt-3 d-none"></div>
 
         <div class="row g-3 mt-3">
           <div class="col-md-4">
             <div class="border rounded p-3 bg-light">
-              <div class="text-muted small">Total em servi+ºos</div>
+              <div class="text-muted small">Total em servicos</div>
               <div class="fs-6 fw-semibold" data-total="servicos">R$ <?= number_format($totalServicosInicial, 2, ',', '.') ?></div>
             </div>
           </div>
@@ -577,7 +582,7 @@ ob_start();
   <div class="d-flex justify-content-between align-items-center mt-4">
     <button type="button" class="btn btn-outline-secondary" id="btn-prev">Anterior</button>
     <div class="ms-auto d-flex gap-2">
-      <button type="button" class="btn btn-primary" id="btn-next">Pr+¦ximo</button>
+      <button type="button" class="btn btn-primary" id="btn-next">Proximo</button>
       <button type="submit" class="btn btn-success d-none" id="btn-submit"><?= $editando ? 'Atualizar Proposta' : 'Salvar Proposta' ?></button>
     </div>
   </div>
@@ -606,7 +611,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const pacotesConfig = <?= json_encode($pacotesMapForJs, JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION) ?>;
+  const pacotesConfig = <?= json_encode($pacotesMapForJs, JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION) ?> || {};
   const isEditing = <?= $editando ? 'true' : 'false' ?>;
   const selectPacote = document.querySelector('select[name="id_pacote"]');
   const colaboradoresInput = document.querySelector('input[name="numero_colaboradores"]');
@@ -614,6 +619,8 @@ document.addEventListener('DOMContentLoaded', function () {
   const franquiaInput = document.querySelector('input[name="franquia_percentual"]');
   const valorImplantacaoInput = document.querySelector('input[name="valor_implantacao"]');
   const valorMensalInput = document.querySelector('input[name="valor_mensal"]');
+  const pacoteInfoTitle = document.getElementById('pacote-info-title');
+  const pacoteInfoBody = document.getElementById('pacote-info-body');
   let manualValorImplantacao = valorImplantacaoInput ? valorImplantacaoInput.value.trim() !== '' : false;
   let manualValorMensal = valorMensalInput ? valorMensalInput.value.trim() !== '' : false;
 
@@ -621,16 +628,99 @@ document.addEventListener('DOMContentLoaded', function () {
     return (Math.round(value * 100) / 100).toFixed(2);
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, function (char) {
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      return map[char] || char;
+    });
+  }
+
+  function renderMultiline(value) {
+    return escapeHtml(value).replace(/\r?\n/g, '<br>');
+  }
+
+  function atualizarResumoPacote(pacote) {
+    if (!pacoteInfoTitle || !pacoteInfoBody) {
+      return;
+    }
+
+    if (!pacote) {
+      pacoteInfoTitle.textContent = 'Nenhum pacote selecionado';
+      pacoteInfoBody.innerHTML = '<div>Selecione um pacote para visualizar os parametros.</div>';
+      return;
+    }
+
+    pacoteInfoTitle.textContent = pacote.nome || 'Nenhum pacote selecionado';
+
+    const partes = [];
+    if (pacote.descricao) {
+      partes.push('<div>' + renderMultiline(pacote.descricao) + '</div>');
+    }
+    if (pacote.conformidade) {
+      partes.push('<div class="mt-1"><small class="text-muted">Conformidade:</small> ' + renderMultiline(pacote.conformidade) + '</div>');
+    }
+    if (!partes.length) {
+      partes.push('<div>Selecione um pacote para visualizar os parametros.</div>');
+    }
+    pacoteInfoBody.innerHTML = partes.join('');
+  }
+
   function aplicarParametrosPacote(forceOverride) {
     if (!selectPacote) {
       return;
     }
+
     const pacoteId = parseInt(selectPacote.value, 10);
-    const pacote = pacotesConfig[pacoteId];
+    const pacote = Number.isInteger(pacoteId) ? pacotesConfig[pacoteId] : null;
+
+    atualizarResumoPacote(pacote || null);
+
     if (!pacote) {
+      if (forceOverride) {
+        if (valorImplantacaoInput && !manualValorImplantacao) {
+          valorImplantacaoInput.value = '';
+        }
+        if (valorMensalInput && !manualValorMensal) {
+          valorMensalInput.value = '';
+        }
+        if (sinistralidadeInput) {
+          sinistralidadeInput.value = '';
+        }
+        if (franquiaInput) {
+          franquiaInput.value = '';
+        }
+      }
       return;
     }
+
     const colaboradores = colaboradoresInput ? parseInt(colaboradoresInput.value, 10) : NaN;
+
+    if (sinistralidadeInput && (forceOverride || !sinistralidadeInput.value)) {
+      const sinPadrao = parseFloat(pacote.sinistralidade_padrao);
+      if (Number.isFinite(sinPadrao)) {
+        let sinFinal = sinPadrao;
+        if (Number.isFinite(colaboradores) && colaboradores >= 300 && (pacote.tipo_calculo === 'sinistralidade' || pacote.tipo_calculo === 'franquia')) {
+          sinFinal = Math.min(sinFinal, 5);
+        }
+        sinistralidadeInput.value = formatNumberToField(sinFinal);
+      } else if (forceOverride) {
+        sinistralidadeInput.value = '';
+      }
+    }
+
+    if (franquiaInput && (forceOverride || !franquiaInput.value)) {
+      const franqPadrao = parseFloat(pacote.franquia_padrao);
+      if (Number.isFinite(franqPadrao)) {
+        let franqFinal = franqPadrao;
+        if (Number.isFinite(colaboradores) && colaboradores >= 300 && pacote.tipo_calculo === 'franquia') {
+          franqFinal = Math.min(franqFinal, 5);
+        }
+        franquiaInput.value = formatNumberToField(franqFinal);
+      } else if (forceOverride) {
+        franquiaInput.value = '';
+      }
+    }
+
     if (!Number.isFinite(colaboradores) || colaboradores <= 0) {
       if (forceOverride) {
         if (valorImplantacaoInput && !manualValorImplantacao) {
@@ -643,33 +733,40 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
+    const baseImplantacao = parseFloat(pacote.valor_implantacao_base);
+    const baseMensal = parseFloat(pacote.valor_mensal_base);
+
+    let implCalc = Number.isFinite(baseImplantacao) ? baseImplantacao : null;
+    let mensalCalc = Number.isFinite(baseMensal) ? baseMensal : null;
+
     if (pacote.tipo_calculo === 'fixo') {
-      const base = parseFloat(pacote.valor_implantacao_base);
-      if (!Number.isFinite(base) || base <= 0) {
-        return;
+      if (Number.isFinite(baseImplantacao) && baseImplantacao > 0) {
+        implCalc = Math.max(1, Math.ceil(colaboradores / 50)) * baseImplantacao;
+      } else {
+        implCalc = null;
       }
-      const blocos = Math.max(1, Math.ceil(colaboradores / 50));
-      const totalImplantacao = blocos * base;
-      if (valorImplantacaoInput && (!manualValorImplantacao || forceOverride)) {
-        valorImplantacaoInput.value = formatNumberToField(totalImplantacao);
-        manualValorImplantacao = false;
-      }
-      if (valorMensalInput && (!manualValorMensal || forceOverride)) {
-        valorMensalInput.value = formatNumberToField(0);
-        manualValorMensal = false;
+      mensalCalc = 0;
+    } else {
+      if (Number.isFinite(baseMensal)) {
+        mensalCalc = colaboradores * baseMensal;
       }
     }
 
-    if (sinistralidadeInput && (!sinistralidadeInput.value || forceOverride)) {
-      const sinPadrao = parseFloat(pacote.sinistralidade_padrao);
-      if (Number.isFinite(sinPadrao)) {
-        sinistralidadeInput.value = formatNumberToField(sinPadrao);
+    if (valorImplantacaoInput) {
+      if (Number.isFinite(implCalc) && (!manualValorImplantacao || forceOverride)) {
+        valorImplantacaoInput.value = formatNumberToField(implCalc);
+        manualValorImplantacao = false;
+      } else if (forceOverride && !manualValorImplantacao) {
+        valorImplantacaoInput.value = '';
       }
     }
-    if (franquiaInput && (!franquiaInput.value || forceOverride)) {
-      const franqPadrao = parseFloat(pacote.franquia_padrao);
-      if (Number.isFinite(franqPadrao)) {
-        franquiaInput.value = formatNumberToField(franqPadrao);
+
+    if (valorMensalInput) {
+      if (Number.isFinite(mensalCalc) && (!manualValorMensal || forceOverride)) {
+        valorMensalInput.value = formatNumberToField(mensalCalc);
+        manualValorMensal = false;
+      } else if (forceOverride && !manualValorMensal) {
+        valorMensalInput.value = '';
       }
     }
   }
@@ -679,30 +776,28 @@ document.addEventListener('DOMContentLoaded', function () {
       manualValorImplantacao = this.value.trim() !== '';
     });
   }
+
   if (valorMensalInput) {
     valorMensalInput.addEventListener('input', function () {
       manualValorMensal = this.value.trim() !== '';
     });
   }
+
   if (selectPacote) {
     selectPacote.addEventListener('change', function () {
       manualValorImplantacao = valorImplantacaoInput ? valorImplantacaoInput.value.trim() !== '' : false;
       manualValorMensal = valorMensalInput ? valorMensalInput.value.trim() !== '' : false;
-      aplicarParametrosPacote(false);
+      aplicarParametrosPacote(true);
     });
   }
+
   if (colaboradoresInput) {
     colaboradoresInput.addEventListener('input', function () {
       aplicarParametrosPacote(false);
     });
   }
 
-  if (!isEditing) {
-    aplicarParametrosPacote(true);
-  } else {
-    aplicarParametrosPacote(false);
-  }
-
+  aplicarParametrosPacote(!isEditing);
   function showStep(step) {
     currentStep = step;
     steps.forEach(function (pane) {
@@ -784,7 +879,7 @@ document.addEventListener('DOMContentLoaded', function () {
     tr.innerHTML = `
       <td>
         <select class="form-select form-select-sm item-tipo" data-name="tipo_item">
-          <option value="servico" ${item.tipo_item === 'servico' ? 'selected' : ''}>Servi+ºo</option>
+          <option value="servico" ${item.tipo_item === 'servico' ? 'selected' : ''}>Servico</option>
           <option value="material" ${item.tipo_item === 'material' ? 'selected' : ''}>Material</option>
         </select>
       </td>
@@ -862,7 +957,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!hasValidItem) {
       event.preventDefault();
-      errorAlert.textContent = 'Adicione pelo menos um item v+ílido (com descri+º+úo e quantidade).';
+      errorAlert.textContent = 'Adicione pelo menos um item valido (com descricao e quantidade).';
       errorAlert.classList.remove('d-none');
       showStep(2);
       return;

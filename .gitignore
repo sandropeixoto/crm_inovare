@@ -26,6 +26,7 @@ storage/
 cache/
 tmp/
 *.cache
+public/imagens/
 
 # Arquivos grandes de trabalho
 *.zip
