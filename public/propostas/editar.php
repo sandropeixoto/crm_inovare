@@ -323,6 +323,18 @@ $breadcrumb = 'Comercial > Propostas > ' . ($editando ? 'Editar' : 'Nova');
 
 $itemsJson = json_encode($itensForm, JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
 
+$pacotesMapForJs = [];
+foreach ($pacotes as $pacoteRow) {
+    $pacotesMapForJs[(int)$pacoteRow['id']] = [
+        'id' => (int)$pacoteRow['id'],
+        'tipo_calculo' => $pacoteRow['tipo_calculo'] ?? null,
+        'valor_implantacao_base' => isset($pacoteRow['valor_implantacao_base']) ? (float)$pacoteRow['valor_implantacao_base'] : 0.0,
+        'valor_mensal_base' => isset($pacoteRow['valor_mensal_base']) ? (float)$pacoteRow['valor_mensal_base'] : 0.0,
+        'sinistralidade_padrao' => isset($pacoteRow['sinistralidade_padrao']) ? (float)$pacoteRow['sinistralidade_padrao'] : null,
+        'franquia_padrao' => isset($pacoteRow['franquia_padrao']) ? (float)$pacoteRow['franquia_padrao'] : null,
+    ];
+}
+
 $pacoteSelecionado = null;
 if (!empty($formData['id_pacote'])) {
     foreach ($pacotes as $pacoteDados) {
@@ -593,6 +605,103 @@ document.addEventListener('DOMContentLoaded', function () {
   let rowCount = 0;
 
   const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const pacotesConfig = <?= json_encode($pacotesMapForJs, JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION) ?>;
+  const isEditing = <?= $editando ? 'true' : 'false' ?>;
+  const selectPacote = document.querySelector('select[name="id_pacote"]');
+  const colaboradoresInput = document.querySelector('input[name="numero_colaboradores"]');
+  const sinistralidadeInput = document.querySelector('input[name="sinistralidade_percentual"]');
+  const franquiaInput = document.querySelector('input[name="franquia_percentual"]');
+  const valorImplantacaoInput = document.querySelector('input[name="valor_implantacao"]');
+  const valorMensalInput = document.querySelector('input[name="valor_mensal"]');
+  let manualValorImplantacao = valorImplantacaoInput ? valorImplantacaoInput.value.trim() !== '' : false;
+  let manualValorMensal = valorMensalInput ? valorMensalInput.value.trim() !== '' : false;
+
+  function formatNumberToField(value) {
+    return (Math.round(value * 100) / 100).toFixed(2);
+  }
+
+  function aplicarParametrosPacote(forceOverride) {
+    if (!selectPacote) {
+      return;
+    }
+    const pacoteId = parseInt(selectPacote.value, 10);
+    const pacote = pacotesConfig[pacoteId];
+    if (!pacote) {
+      return;
+    }
+    const colaboradores = colaboradoresInput ? parseInt(colaboradoresInput.value, 10) : NaN;
+    if (!Number.isFinite(colaboradores) || colaboradores <= 0) {
+      if (forceOverride) {
+        if (valorImplantacaoInput && !manualValorImplantacao) {
+          valorImplantacaoInput.value = '';
+        }
+        if (valorMensalInput && !manualValorMensal) {
+          valorMensalInput.value = '';
+        }
+      }
+      return;
+    }
+
+    if (pacote.tipo_calculo === 'fixo') {
+      const base = parseFloat(pacote.valor_implantacao_base);
+      if (!Number.isFinite(base) || base <= 0) {
+        return;
+      }
+      const blocos = Math.max(1, Math.ceil(colaboradores / 50));
+      const totalImplantacao = blocos * base;
+      if (valorImplantacaoInput && (!manualValorImplantacao || forceOverride)) {
+        valorImplantacaoInput.value = formatNumberToField(totalImplantacao);
+        manualValorImplantacao = false;
+      }
+      if (valorMensalInput && (!manualValorMensal || forceOverride)) {
+        valorMensalInput.value = formatNumberToField(0);
+        manualValorMensal = false;
+      }
+    }
+
+    if (sinistralidadeInput && (!sinistralidadeInput.value || forceOverride)) {
+      const sinPadrao = parseFloat(pacote.sinistralidade_padrao);
+      if (Number.isFinite(sinPadrao)) {
+        sinistralidadeInput.value = formatNumberToField(sinPadrao);
+      }
+    }
+    if (franquiaInput && (!franquiaInput.value || forceOverride)) {
+      const franqPadrao = parseFloat(pacote.franquia_padrao);
+      if (Number.isFinite(franqPadrao)) {
+        franquiaInput.value = formatNumberToField(franqPadrao);
+      }
+    }
+  }
+
+  if (valorImplantacaoInput) {
+    valorImplantacaoInput.addEventListener('input', function () {
+      manualValorImplantacao = this.value.trim() !== '';
+    });
+  }
+  if (valorMensalInput) {
+    valorMensalInput.addEventListener('input', function () {
+      manualValorMensal = this.value.trim() !== '';
+    });
+  }
+  if (selectPacote) {
+    selectPacote.addEventListener('change', function () {
+      manualValorImplantacao = valorImplantacaoInput ? valorImplantacaoInput.value.trim() !== '' : false;
+      manualValorMensal = valorMensalInput ? valorMensalInput.value.trim() !== '' : false;
+      aplicarParametrosPacote(false);
+    });
+  }
+  if (colaboradoresInput) {
+    colaboradoresInput.addEventListener('input', function () {
+      aplicarParametrosPacote(false);
+    });
+  }
+
+  if (!isEditing) {
+    aplicarParametrosPacote(true);
+  } else {
+    aplicarParametrosPacote(false);
+  }
 
   function showStep(step) {
     currentStep = step;
