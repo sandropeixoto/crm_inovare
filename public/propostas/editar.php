@@ -192,10 +192,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $valorMensal = $formData['valor_mensal'];
 
             if ($sinPercentual !== null) {
-                $sinPercentual = round($sinPercentual, 4);
+                $sinPercentual = round($sinPercentual, 2);
             }
             if ($franquiaPercentual !== null) {
-                $franquiaPercentual = round($franquiaPercentual, 4);
+                $franquiaPercentual = round($franquiaPercentual, 2);
             }
             if ($valorImplantacao !== null) {
                 $valorImplantacao = round($valorImplantacao, 2);
