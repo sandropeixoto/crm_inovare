@@ -213,3 +213,11 @@ CREATE TABLE IF NOT EXISTS menus (
 );
 
 CREATE INDEX IF NOT EXISTS idx_menus_parent ON menus(parent_id);
+
+CREATE TABLE IF NOT EXISTS password_resets (
+    email TEXT NOT NULL,
+    token TEXT NOT NULL PRIMARY KEY,
+    expires_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_resets_email ON password_resets(email);

@@ -482,8 +482,15 @@ function run_query(string $sql, array $params = []): array
         return ['affected' => $stmt->rowCount()];
     } catch (Throwable $e) {
         log_system('error', 'Query falhou: ' . $e->getMessage() . ' | SQL: ' . $sql, __FILE__, __LINE__);
-        http_response_code(500);
-        exit('Erro interno ao executar operação.');
+
+        // Redireciona para a página de erro
+        ob_start();
+        require_once __DIR__ . '/../app/views/error.php';
+        $content = ob_get_clean();
+
+        // Inclui o template base
+        include __DIR__ . '/../public/inc/template_base.php';
+        exit;
     }
 }
 
