@@ -1,116 +1,33 @@
 <?php
 require_once __DIR__ . '/../config/db.php';
-ensure_session_security();
+require_once __DIR__ . '/../app/controllers/BaseController.php';
+require_once __DIR__ . '/../app/controllers/UserController.php';
+require_once __DIR__ . '/../app/controllers/DashboardController.php';
 
-$user = current_user();
-$page_title = 'Dashboard';
-$breadcrumb = 'Início > Dashboard';
+$request_uri = $_SERVER['REQUEST_URI'];
+$base_path = '/';
+$route = str_replace($base_path, '', $request_uri);
+$route = trim($route, '/');
+$parts = explode('/', $route);
 
-$totalClientes = (int)(run_query("SELECT COUNT(*) AS c FROM clientes")[0]['c'] ?? 0);
-$totalPropostas = (int)(run_query("SELECT COUNT(*) AS c FROM propostas")[0]['c'] ?? 0);
-$totalPacotes = (int)(run_query("SELECT COUNT(*) AS c FROM pacotes WHERE ativo=TRUE")[0]['c'] ?? 0);
-$totalUsuarios = (int)(run_query("SELECT COUNT(*) AS c FROM usuarios WHERE ativo=TRUE")[0]['c'] ?? 0);
+$controllerName = !empty($parts[0]) ? ucfirst($parts[0]) . 'Controller' : 'DashboardController';
+$methodName = $parts[1] ?? 'index';
+$param = $parts[2] ?? null;
 
-ob_start();
-?>
-<div class="row">
-  <!-- Clientes -->
-  <div class="col-lg-3 col-6">
-    <div class="small-box bg-info">
-      <div class="inner">
-        <h3><?= $totalClientes ?></h3>
-        <p>Total de Clientes</p>
-      </div>
-      <div class="icon">
-        <i class="fas fa-users"></i>
-      </div>
-      <a href="<?= app_url('clientes/listar.php') ?>" class="small-box-footer">
-        Ver mais <i class="fas fa-arrow-circle-right"></i>
-      </a>
-    </div>
-  </div>
-
-  <!-- Propostas -->
-  <div class="col-lg-3 col-6">
-    <div class="small-box bg-success">
-      <div class="inner">
-        <h3><?= $totalPropostas ?></h3>
-        <p>Propostas Emitidas</p>
-      </div>
-      <div class="icon">
-        <i class="fas fa-file-invoice"></i>
-      </div>
-      <a href="<?= app_url('propostas/listar.php') ?>" class="small-box-footer">
-        Ver mais <i class="fas fa-arrow-circle-right"></i>
-      </a>
-    </div>
-  </div>
-
-  <!-- Pacotes -->
-  <div class="col-lg-3 col-6">
-    <div class="small-box bg-warning">
-      <div class="inner">
-        <h3><?= $totalPacotes ?></h3>
-        <p>Pacotes Ativos</p>
-      </div>
-      <div class="icon">
-        <i class="fas fa-box"></i>
-      </div>
-      <a href="<?= app_url('auxiliares/pacotes/listar.php') ?>" class="small-box-footer">
-        Ver mais <i class="fas fa-arrow-circle-right"></i>
-      </a>
-    </div>
-  </div>
-
-  <!-- Usuários -->
-  <div class="col-lg-3 col-6">
-    <div class="small-box bg-danger">
-      <div class="inner">
-        <h3><?= $totalUsuarios ?></h3>
-        <p>Usuários Ativos</p>
-      </div>
-      <div class="icon">
-        <i class="fas fa-user-shield"></i>
-      </div>
-      <a href="<?= app_url('usuarios/listar.php') ?>" class="small-box-footer">
-        Ver mais <i class="fas fa-arrow-circle-right"></i>
-      </a>
-    </div>
-  </div>
-</div>
-
-<div class="row">
-  <div class="col-md-12">
-    <div class="card">
-      <div class="card-header">
-        <h3 class="card-title">
-          <i class="fas fa-chart-line mr-1"></i>
-          Bem-vindo ao CRM Inovare
-        </h3>
-      </div>
-      <div class="card-body">
-        <p>Olá, <strong><?= e($user['nome']) ?></strong>!</p>
-        <p>Use o menu lateral para navegar entre os módulos do sistema.</p>
-        <p>Os itens do menu são gerenciados dinamicamente a partir da tabela <strong>menus</strong>.</p>
+if (class_exists($controllerName)) {
+    $controller = new $controllerName();
+    if (method_exists($controller, $methodName)) {
+        ob_start();
+        $controller->$methodName($param);
+        $content = ob_get_clean();
         
-        <div class="mt-4">
-          <h5>Acesso Rápido:</h5>
-          <div class="btn-group" role="group">
-            <a href="<?= app_url('clientes/nova.php') ?>" class="btn btn-primary">
-              <i class="fas fa-plus"></i> Novo Cliente
-            </a>
-            <a href="<?= app_url('propostas/nova.php') ?>" class="btn btn-success">
-              <i class="fas fa-file-invoice"></i> Nova Proposta
-            </a>
-            <a href="<?= app_url('relatorios/dashboard_financeiro.php') ?>" class="btn btn-info">
-              <i class="fas fa-chart-bar"></i> Relatórios
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-<?php
-$content = ob_get_clean();
-include __DIR__ . '/inc/template_base.php';
+        // Inclui o template base
+        include __DIR__ . '/inc/template_base.php';
+    } else {
+        http_response_code(404);
+        echo "Página não encontrada.";
+    }
+} else {
+    http_response_code(404);
+    echo "Página não encontrada.";
+}
